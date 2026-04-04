@@ -1,154 +1,105 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import numpy as np
-import pandas as pd
+"""
+AgriTech ML Service — FastAPI
+─────────────────────────────
+Upgraded from Flask to FastAPI for:
+  - Async support for I/O-bound LLM calls
+  - Automatic OpenAPI docs at /docs
+  - Pydantic request/response validation
+  - Proper lifespan management (startup/shutdown events)
 
-app = Flask(__name__)
-CORS(app)
+Endpoints:
+  GET  /health                      → service health + RAG status
+  POST /predict/nutrient-depletion  → nutrient depletion projection
+  POST /predict/rotation            → crop rotation recommendation
+  POST /predict/soil-score          → soil health score 0-100
+  POST /soil/score                  → alias (used by soilController.js)
+  POST /rag/chat                    → RAG + LLM conversational AI
+  POST /rag/summarize               → session memory compression
+"""
 
-# Crop nutrient requirements (N, P, K in kg/acre)
-CROP_NUTRIENTS = {
-    'rice': {'N': 80, 'P': 40, 'K': 40},
-    'wheat': {'N': 120, 'P': 60, 'K': 40},
-    'sugarcane': {'N': 300, 'P': 100, 'K': 200},
-    'cotton': {'N': 120, 'P': 60, 'K': 60},
-    'maize': {'N': 120, 'P': 60, 'K': 40},
-    'soybean': {'N': 30, 'P': 60, 'K': 40, 'N_replenish': 50},  # Legume - adds N
-    'chickpea': {'N': 20, 'P': 40, 'K': 20, 'N_replenish': 40},
-    'pigeon_pea': {'N': 25, 'P': 50, 'K': 25, 'N_replenish': 45},
-}
+import os
+import logging
+from contextlib import asynccontextmanager
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok', 'message': 'ML Service Running'})
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
-@app.route('/predict/nutrient-depletion', methods=['POST'])
-def predict_nutrient_depletion():
-    """Calculate nutrient depletion based on cropping history"""
+load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
+logger = logging.getLogger(__name__)
+
+
+# ── Startup / Shutdown ─────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Initializing RAG knowledge base...")
     try:
-        data = request.json
-        current_soil = data['currentSoilHealth']
-        cropping_history = data['croppingHistory']
-        
-        # Calculate cumulative nutrient extraction
-        total_extraction = {'N': 0, 'P': 0, 'K': 0}
-        total_replenishment = {'N': 0, 'P': 0, 'K': 0}
-        
-        for entry in cropping_history:
-            crop = entry['crop'].lower().replace(' ', '_')
-            if crop in CROP_NUTRIENTS:
-                nutrients = CROP_NUTRIENTS[crop]
-                total_extraction['N'] += nutrients['N']
-                total_extraction['P'] += nutrients['P']
-                total_extraction['K'] += nutrients['K']
-                
-                # Add replenishment for legumes
-                if 'N_replenish' in nutrients:
-                    total_replenishment['N'] += nutrients['N_replenish']
-        
-        # Project future depletion (3 seasons ahead)
-        projected_N = [current_soil['N']]
-        projected_P = [current_soil['P']]
-        projected_K = [current_soil['K']]
-        
-        avg_n_loss = total_extraction['N'] / max(len(cropping_history), 1)
-        avg_p_loss = total_extraction['P'] / max(len(cropping_history), 1)
-        avg_k_loss = total_extraction['K'] / max(len(cropping_history), 1)
-        
-        for i in range(3):
-            projected_N.append(max(0, projected_N[-1] - avg_n_loss * 0.6))
-            projected_P.append(max(0, projected_P[-1] - avg_p_loss * 0.5))
-            projected_K.append(max(0, projected_K[-1] - avg_k_loss * 0.5))
-        
-        # Calculate risk score
-        risk_scores = []
-        for n, p, k in zip(projected_N, projected_P, projected_K):
-            risk = 0
-            if n < 200: risk += 1
-            if n < 100: risk += 1
-            if p < 15: risk += 1
-            if p < 8: risk += 1
-            if k < 100: risk += 1
-            if k < 50: risk += 1
-            risk_scores.append(risk)
-        
-        risk_level = 'Low'
-        if risk_scores[-1] >= 5:
-            risk_level = 'Critical'
-        elif risk_scores[-1] >= 3:
-            risk_level = 'High'
-        elif risk_scores[-1] >= 2:
-            risk_level = 'Medium'
-        
-        return jsonify({
-            'riskScore': risk_level,
-            'nutrientDepletion': {
-                'N': {'current': current_soil['N'], 'projected': projected_N[1:]},
-                'P': {'current': current_soil['P'], 'projected': projected_P[1:]},
-                'K': {'current': current_soil['K'], 'projected': projected_K[1:]}
-            },
-            'yieldDeclineProbability': min(100, risk_scores[-1] * 15),
-            'economicLoss': risk_scores[-1] * 5000,  # ₹ per acre
-            'soilRecoveryTimeline': max(6, risk_scores[-1] * 3)  # months
-        })
+        from rag.knowledge_base import get_all_chunks
+        from rag import retriever
+        retriever.initialize(get_all_chunks())
+        logger.info("RAG ready — %d chunks, mode: %s", len(retriever._chunks), retriever._embed_mode)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("RAG initialization failed: %s — service will use fallback responses", e)
+    yield
+    logger.info("ML Service shutting down.")
 
-@app.route('/recommend/rotation', methods=['POST'])
-def recommend_rotation():
-    """Recommend crop rotation based on soil health"""
+
+# ── App instance ───────────────────────────────────
+app = FastAPI(
+    title       = "AgriTech ML Service",
+    description = "AI-powered predictions and RAG chat for agriculture",
+    version     = "2.0.0",
+    lifespan    = lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins  = ["*"],
+    allow_methods  = ["*"],
+    allow_headers  = ["*"],
+)
+
+
+# ── Register routers ───────────────────────────────
+from routers.predictions import router as pred_router
+from routers.chat        import router as chat_router
+
+app.include_router(pred_router)
+app.include_router(chat_router)
+
+# /soil/score alias (soilController.js calls this)
+from routers.predictions import compute_soil_score, SoilScoreRequest
+@app.post("/soil/score", tags=["Soil Alias"])
+def soil_score_alias(req: SoilScoreRequest):
+    return compute_soil_score(req)
+
+
+# ── Health check ───────────────────────────────────
+@app.get("/health", tags=["Health"])
+async def health():
     try:
-        data = request.json
-        current_soil = data['currentSoilHealth']
-        cropping_history = data['croppingHistory']
-        region = data.get('region', '')
-        
-        # Get recently grown crops
-        recent_crops = [entry['crop'].lower().replace(' ', '_') for entry in cropping_history[-3:]]
-        
-        recommendations = []
-        
-        # If N is low, recommend legumes
-        if current_soil['N'] < 150:
-            recommendations.append({
-                'season': 'Rabi',
-                'crop': 'Chickpea',
-                'reason': 'Legume crop will replenish nitrogen naturally'
-            })
-            recommendations.append({
-                'season': 'Kharif',
-                'crop': 'Soybean',
-                'reason': 'High nitrogen fixation, improves soil organic matter'
-            })
-        
-        # If nutrients are moderate, rotate with less demanding crops
-        if current_soil['N'] > 150 and 'rice' not in recent_crops:
-            recommendations.append({
-                'season': 'Kharif',
-                'crop': 'Rice',
-                'reason': 'Moderate nutrient demand, good for crop diversification'
-            })
-        
-        # Add wheat for winter season
-        if 'wheat' not in recent_crops:
-            recommendations.append({
-                'season': 'Rabi',
-                'crop': 'Wheat',
-                'reason': 'Complements summer crops, good market demand'
-            })
-        
-        # Always suggest green manure
-        recommendations.append({
-            'season': 'Zaid',
-            'crop': 'Green Manure (Sunhemp)',
-            'reason': 'Improves soil structure and adds organic matter'
-        })
-        
-        return jsonify({
-            'recommendations': recommendations[:5]
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        from rag import retriever
+        rag_status = {"chunks": len(retriever._chunks), "mode": retriever._embed_mode}
+    except Exception:
+        rag_status = {"chunks": 0, "mode": "unavailable"}
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    return {
+        "status":     "ok",
+        "service":    "agritech-ml",
+        "rag":        rag_status,
+        "openai_key": bool(os.getenv("OPENAI_API_KEY")),
+        "version":    "2.0.0",
+    }
+
+
+# ── Dev entry point ────────────────────────────────
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app:app",
+        host    = "0.0.0.0",
+        port    = int(os.getenv("PORT", 5001)),
+        reload  = os.getenv("ENV", "development") == "development",
+        log_level = "info",
+    )

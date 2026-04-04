@@ -95,10 +95,7 @@ const crops = [
   }
 ];
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/agritech', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/agritech')
 .then(async () => {
   console.log('Connected to MongoDB');
   await Crop.deleteMany({});
