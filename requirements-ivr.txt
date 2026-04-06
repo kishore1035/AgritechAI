@@ -1,0 +1,41 @@
+# AgriTech AI - IVR Integration Dependencies
+
+# Core AI/Speech APIs
+openai>=1.0.0          # OpenAI API (Whisper, GPT-4, embeddings)
+twilio>=9.0.0          # Twilio SMS/Voice API
+
+# Web Framework
+flask>=3.0.0           # Flask web framework
+gunicorn>=21.0.0       # Production WSGI server
+flask-cors>=4.0.0      # CORS support
+flask-limiter>=3.5.0   # Rate limiting
+
+# Data & Validation
+pydantic>=2.0.0        # Data validation
+python-dotenv>=1.0.0   # Environment variable management
+pandas>=2.0.0          # Data manipulation
+
+# Audio Processing (Optional but recommended)
+librosa>=0.10.0        # Audio analysis
+soundfile>=0.12.0      # Audio I/O
+pydub>=0.25.0          # Audio format conversion
+numpy>=1.24.0          # Numerical computing
+
+# Database (if using PostgreSQL)
+psycopg2-binary>=2.9.0 # PostgreSQL adapter
+sqlalchemy>=2.0.0      # ORM
+
+# Logging & Monitoring
+python-json-logger>=2.0.0  # Structured logging
+sentry-sdk>=1.30.0     # Error tracking
+
+# Development & Testing
+pytest>=7.0.0          # Testing framework
+pytest-cov>=4.0.0      # Coverage reporting
+black>=23.0.0          # Code formatting
+pylint>=2.17.0         # Code linting
+mypy>=1.0.0            # Type checking
+
+# Production Deployment
+redis>=4.5.0           # Caching (optional)
+celery>=5.3.0          # Task queue (optional)

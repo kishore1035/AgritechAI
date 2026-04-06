@@ -1,0 +1,32 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    uses: zawadzkim/shared-gh-workflows/.github/workflows/pixi-deploy.yml@pixi
+    with:
+      pixi-version: 'v0.59.0'
+      environment: 'dev'
+      pypi-environment: 'pypi'
+      deploy-docs: true
+      docs-environment: 'docs'
+      docs-build-command: 'mkdocs build'
+      skip-existing-versions: true
+      publish-conda-forge: true
+      conda-forge-feedstock: 'simplesoilprofile-feedstock'
+      conda-forge-branch: 'auto-update'
+    secrets:
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}

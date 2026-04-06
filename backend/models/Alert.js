@@ -1,3 +1,7 @@
+if (process.env.LOCAL_DB === 'true') {
+  const { createLocalModel } = require('../config/localDb');
+  module.exports = createLocalModel('alerts', { timestamps: true });
+} else {
 const mongoose = require('mongoose');
 
 /**
@@ -63,3 +67,4 @@ alertSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 alertSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index
 
 module.exports = mongoose.model('Alert', alertSchema);
+}

@@ -1,0 +1,39 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\PREETHI\\Downloads\\agritech-ai\\ml-service']
+INFO:     Uvicorn running on http://0.0.0.0:5001 (Press CTRL+C to quit)
+INFO:     Started reloader process [32812] using StatReload
+INFO:     Started server process [33908]
+INFO:     Waiting for application startup.
+INFO  app  Initializing RAG knowledge base...
+WARNING  rag.retriever  SentenceTransformers unavailable: No module named 'sentence_transformers' — falling back to TF-IDF
+INFO  rag.retriever  TF-IDF index built (14 chunks)
+INFO  app  RAG ready — 14 chunks, mode: tfidf
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'module_registry.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO  app  ML Service shutting down.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [33908]
+INFO:     Started server process [30512]
+INFO:     Waiting for application startup.
+INFO  app  Initializing RAG knowledge base...
+WARNING  rag.retriever  SentenceTransformers unavailable: No module named 'sentence_transformers' — falling back to TF-IDF
+INFO  rag.retriever  TF-IDF index built (14 chunks)
+INFO  app  RAG ready — 14 chunks, mode: tfidf
+INFO:     Application startup complete.
+WARNING  routers.predictions  OPENAI_API_KEY not set, using fallback analysis
+WARNING  routers.predictions  OPENAI_API_KEY not set, using fallback analysis
+WARNING  routers.predictions  OPENAI_API_KEY not set, using fallback analysis
+WARNING:  StatReload detected changes in 'module_registry.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO  app  ML Service shutting down.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [30512]
+INFO:     Started server process [15940]
+INFO:     Waiting for application startup.
+INFO  app  Initializing RAG knowledge base...
+WARNING  rag.retriever  SentenceTransformers unavailable: No module named 'sentence_transformers' — falling back to TF-IDF
+INFO  rag.retriever  TF-IDF index built (14 chunks)
+INFO  app  RAG ready — 14 chunks, mode: tfidf
+INFO:     Application startup complete.

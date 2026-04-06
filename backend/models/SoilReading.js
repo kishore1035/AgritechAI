@@ -1,3 +1,7 @@
+if (process.env.LOCAL_DB === 'true') {
+  const { createLocalModel } = require('../config/localDb');
+  module.exports = createLocalModel('soilReadings', { timestamps: true });
+} else {
 const mongoose = require('mongoose');
 
 /**
@@ -61,3 +65,4 @@ const soilReadingSchema = new mongoose.Schema({
 soilReadingSchema.index({ farmId: 1, readingDate: -1 });
 
 module.exports = mongoose.model('SoilReading', soilReadingSchema);
+}

@@ -1,0 +1,25 @@
+{
+  "testEnvironment": "node",
+  "testMatch": ["**/__tests__/**/*.test.js", "**/?(*.)+(spec|test).js"],
+  "collectCoverageFrom": [
+    "controllers/**/*.js",
+    "routes/**/*.js",
+    "middleware/**/*.js",
+    "services/**/*.js",
+    "utils/**/*.js"
+  ],
+  "coveragePathIgnorePatterns": [
+    "/node_modules/",
+    "/test/"
+  ],
+  "coverageThreshold": {
+    "global": {
+      "branches": 70,
+      "functions": 70,
+      "lines": 70,
+      "statements": 70
+    }
+  },
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "testTimeout": 10000
+}

@@ -1,95 +1,119 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Leaf, Droplets, Sun, Thermometer, ChevronDown,
   CheckCircle2, Clock, TrendingUp, ArrowUpRight,
-  Wheat, Sprout, FlaskConical, Star
+  Wheat, Sprout, FlaskConical, Star, Loader, AlertTriangle
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import { cropsAPI } from '../services/api';
 
-/* ── Data ──────────────────────────────────────── */
+/* ── Constants ──────────────────────────────── */
 const SEASONS = ['All', 'Kharif', 'Rabi', 'Zaid'];
-
-const CROPS = [
-  {
-    name: 'Wheat',           latin: 'Triticum aestivum',
-    match: 94,               season: 'Rabi',
-    soilType: 'Loamy',       waterReq: 'Medium',      waterMm: '450–650 mm',
-    temp: '10–25°C',         duration: '100–120 days', yieldPerAcre: '3–4 t/ha',
-    nitrogen: 'High',        phosphorus: 'Medium',     potassium: 'Medium',
-    profitIndex: 88,
-    tags: ['Staple', 'High Demand'],
-    color: 'brand',
-    icon: Wheat,
-    tip: 'Ideal after your current soil pH of 6.8. Avoid waterlogging in early stages.',
-  },
-  {
-    name: 'Chickpea',        latin: 'Cicer arietinum',
-    match: 87,               season: 'Rabi',
-    soilType: 'Sandy Loam',  waterReq: 'Low',         waterMm: '200–350 mm',
-    temp: '20–30°C',         duration: '90–100 days',  yieldPerAcre: '1.5–2 t/ha',
-    nitrogen: 'Low',         phosphorus: 'High',       potassium: 'Low',
-    profitIndex: 79,
-    tags: ['Nitrogen-Fixing', 'Drought-Tolerant'],
-    color: 'harvest',
-    icon: Sprout,
-    tip: 'Excellent rotational crop. Will naturally replenish Nitrogen depleted by wheat.',
-  },
-  {
-    name: 'Mustard',         latin: 'Brassica napus',
-    match: 82,               season: 'Rabi',
-    soilType: 'Sandy Loam',  waterReq: 'Low',         waterMm: '200–300 mm',
-    temp: '10–25°C',         duration: '100–115 days', yieldPerAcre: '1–1.5 t/ha',
-    nitrogen: 'Medium',      phosphorus: 'Medium',     potassium: 'Low',
-    profitIndex: 72,
-    tags: ['Oil Crop', 'Cold Resistant'],
-    color: 'harvest',
-    icon: Leaf,
-    tip: 'Good for diversification. Oils fetch high market prices in Nov–Feb.',
-  },
-  {
-    name: 'Soybean',         latin: 'Glycine max',
-    match: 91,               season: 'Kharif',
-    soilType: 'Loamy',       waterReq: 'Medium',      waterMm: '450–700 mm',
-    temp: '20–30°C',         duration: '90–110 days',  yieldPerAcre: '2–3 t/ha',
-    nitrogen: 'Low',         phosphorus: 'High',       potassium: 'Medium',
-    profitIndex: 85,
-    tags: ['Protein-Rich', 'Export Demand'],
-    color: 'sky',
-    icon: Sprout,
-    tip: 'High MSP support this year. Ideal for loamy soils with good drainage.',
-  },
-  {
-    name: 'Maize (Sweet)',   latin: 'Zea mays saccharata',
-    match: 78,               season: 'Kharif',
-    soilType: 'Loamy',       waterReq: 'High',        waterMm: '500–800 mm',
-    temp: '21–27°C',         duration: '70–90 days',   yieldPerAcre: '5–7 t/ha',
-    nitrogen: 'High',        phosphorus: 'Medium',     potassium: 'High',
-    profitIndex: 76,
-    tags: ['High Yield', 'Fodder Use'],
-    color: 'harvest',
-    icon: Wheat,
-    tip: 'Requires good irrigation. Strong local market demand in summer months.',
-  },
-  {
-    name: 'Moong (Green Gram)', latin: 'Vigna radiata',
-    match: 83,               season: 'Zaid',
-    soilType: 'Sandy Loam',  waterReq: 'Low',         waterMm: '200–400 mm',
-    temp: '25–35°C',         duration: '60–75 days',   yieldPerAcre: '0.8–1.2 t/ha',
-    nitrogen: 'Low',         phosphorus: 'Medium',     potassium: 'Low',
-    profitIndex: 68,
-    tags: ['Quick Maturing', 'Soil Restorer'],
-    color: 'brand',
-    icon: Leaf,
-    tip: 'Perfect filler crop. Improves soil structure and adds organic matter.',
-  },
-];
 
 const colorMap = {
   brand:   { badge: 'bg-brand/15 text-brand border-brand/20', ring: 'stroke-brand', bar: 'bg-brand', dot: 'bg-brand', card: 'border-brand/15 hover:border-brand/35' },
   harvest: { badge: 'bg-harvest/15 text-harvest border-harvest/20', ring: 'stroke-harvest', bar: 'bg-harvest', dot: 'bg-harvest', card: 'border-harvest/15 hover:border-harvest/35' },
   sky:     { badge: 'bg-sky/15 text-sky border-sky/20', ring: 'stroke-sky', bar: 'bg-sky', dot: 'bg-sky', card: 'border-sky/15 hover:border-sky/35' },
 };
+
+/* ── Helper Functions ──────────────────────────────── */
+function getCurrentSeason() {
+  const month = new Date().getMonth() + 1;
+  if (month >= 6 && month <= 9) return 'Kharif';
+  if (month >= 10 && month <= 3) return 'Rabi';
+  return 'Zaid';
+}
+
+function getLatinName(cropName) {
+  const latinNames = {
+    wheat: 'Triticum aestivum',
+    rice: 'Oryza sativa',
+    soybean: 'Glycine max',
+    chickpea: 'Cicer arietinum',
+    maize: 'Zea mays',
+    mustard: 'Brassica napus',
+    cotton: 'Gossypium hirsutum',
+    sugarcane: 'Saccharum officinarum'
+  };
+  return latinNames[cropName.toLowerCase()] || 'Unknown species';
+}
+
+function getWaterRequirement(cropName) {
+  const waterReqs = {
+    wheat: 'Medium', rice: 'High', soybean: 'Medium', 
+    chickpea: 'Low', maize: 'High', mustard: 'Low',
+    cotton: 'High', sugarcane: 'Very High'
+  };
+  return waterReqs[cropName.toLowerCase()] || 'Medium';
+}
+
+function getWaterMm(cropName) {
+  const waterMms = {
+    wheat: '450–650 mm', rice: '1200–1500 mm', soybean: '450–700 mm',
+    chickpea: '200–350 mm', maize: '500–800 mm', mustard: '200–300 mm',
+    cotton: '700–1200 mm', sugarcane: '1500–2500 mm'
+  };
+  return waterMms[cropName.toLowerCase()] || '400–600 mm';
+}
+
+function getTemperatureRange(cropName) {
+  const tempRanges = {
+    wheat: '10–25°C', rice: '20–35°C', soybean: '20–30°C',
+    chickpea: '20–30°C', maize: '21–27°C', mustard: '10–25°C',
+    cotton: '21–30°C', sugarcane: '26–33°C'
+  };
+  return tempRanges[cropName.toLowerCase()] || '20–30°C';
+}
+
+function getDuration(cropName) {
+  const durations = {
+    wheat: '100–120 days', rice: '120–150 days', soybean: '90–110 days',
+    chickpea: '90–100 days', maize: '70–90 days', mustard: '100–115 days',
+    cotton: '180–200 days', sugarcane: '300–365 days'
+  };
+  return durations[cropName.toLowerCase()] || '90–120 days';
+}
+
+function getNutrientLevel(cropName, nutrient) {
+  const nutrients = {
+    wheat: { nitrogen: 'High', phosphorus: 'Medium', potassium: 'Medium' },
+    rice: { nitrogen: 'High', phosphorus: 'Medium', potassium: 'High' },
+    soybean: { nitrogen: 'Low', phosphorus: 'High', potassium: 'Medium' },
+    chickpea: { nitrogen: 'Low', phosphorus: 'High', potassium: 'Low' },
+    maize: { nitrogen: 'High', phosphorus: 'Medium', potassium: 'High' },
+    mustard: { nitrogen: 'Medium', phosphorus: 'Medium', potassium: 'Low' }
+  };
+  return nutrients[cropName.toLowerCase()]?.[nutrient] || 'Medium';
+}
+
+function getTags(cropName) {
+  const tags = {
+    wheat: ['Staple', 'High Demand'],
+    rice: ['Staple', 'Water Intensive'],
+    soybean: ['Protein-Rich', 'Export Demand'],
+    chickpea: ['Nitrogen-Fixing', 'Drought-Tolerant'],
+    maize: ['High Yield', 'Fodder Use'],
+    mustard: ['Oil Crop', 'Cold Resistant'],
+    cotton: ['Cash Crop', 'Fiber'],
+    sugarcane: ['Sugar Crop', 'Long Duration']
+  };
+  return tags[cropName.toLowerCase()] || ['Commercial Crop'];
+}
+
+function getColor(index) {
+  const colors = ['brand', 'harvest', 'sky'];
+  return colors[index % colors.length];
+}
+
+function getIcon(cropName) {
+  const icons = {
+    wheat: Wheat, rice: Wheat, soybean: Sprout,
+    chickpea: Sprout, maize: Wheat, mustard: Leaf,
+    cotton: Leaf, sugarcane: Wheat
+  };
+  return icons[cropName.toLowerCase()] || Leaf;
+}
 
 function MatchRing({ pct, color }) {
   const r = 22, circ = 2 * Math.PI * r;
@@ -267,10 +291,97 @@ function CropCard({ crop, index }) {
 
 export default function CropRecommendation() {
   const [activeSeason, setActiveSeason] = useState('All');
+  const [crops, setCrops] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchCrops = async () => {
+      try {
+        setLoading(true);
+        // Try to get best investment crops first (has market intelligence)
+        const response = await cropsAPI.getBestInvestment(1);
+        
+        if (response.data?.topInvestments) {
+          // Transform market data to match our UI format
+          const transformedCrops = response.data.topInvestments.map((item, index) => ({
+            name: item.crop,
+            latin: getLatinName(item.crop),
+            match: item.score || 75,
+            season: item.seasonal?.season || getCurrentSeason(),
+            soilType: 'Loamy',
+            waterReq: getWaterRequirement(item.crop),
+            waterMm: getWaterMm(item.crop),
+            temp: getTemperatureRange(item.crop),
+            duration: getDuration(item.crop),
+            yieldPerAcre: item.profitEstimate?.yield || '2-3 t/ha',
+            nitrogen: getNutrientLevel(item.crop, 'nitrogen'),
+            phosphorus: getNutrientLevel(item.crop, 'phosphorus'),
+            potassium: getNutrientLevel(item.crop, 'potassium'),
+            profitIndex: item.score || 75,
+            tags: getTags(item.crop),
+            color: getColor(index),
+            icon: getIcon(item.crop),
+            tip: `Market sentiment: ${item.marketSentiment}. ${item.profitEstimate?.roi ? `Expected ROI: ${item.profitEstimate.roi}` : ''}`
+          }));
+          setCrops(transformedCrops);
+        } else {
+          // Fallback to regular crops API
+          const cropsResponse = await cropsAPI.getAll();
+          setCrops(cropsResponse.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch crops:', err);
+        setError(err.response?.data?.error || 'Failed to load crop recommendations');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCrops();
+  }, []);
+
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="px-4 py-6 md:px-8 md:py-8 max-w-5xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-4">
+              <Loader className="w-8 h-8 text-brand animate-spin" />
+              <p className="text-neutral-400">Loading crop recommendations...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="px-4 py-6 md:px-8 md:py-8 max-w-5xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <AlertTriangle className="w-8 h-8 text-alert" />
+              <p className="text-neutral-400">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-brand/10 border border-brand/20 rounded-xl text-brand hover:bg-brand/20 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   const filtered = activeSeason === 'All'
-    ? CROPS
-    : CROPS.filter(c => c.season === activeSeason);
+    ? crops
+    : crops.filter(c => c.season === activeSeason);
 
   const sorted = [...filtered].sort((a, b) => b.match - a.match);
 

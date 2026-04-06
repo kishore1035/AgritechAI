@@ -27,7 +27,26 @@ api.interceptors.response.use(
 );
 
 export const authAPI = {
-  register: (data) => api.post('/auth/register', data),
+  register: async (data) => {
+    try {
+      console.log('🚀 Registration attempt:', { 
+        url: `${API_BASE_URL}/auth/register`,
+        data: { ...data, password: '[HIDDEN]' } 
+      });
+      
+      const response = await api.post('/auth/register', data);
+      console.log('✅ Registration successful:', response.status);
+      return response;
+    } catch (error) {
+      console.error('❌ Registration failed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
   login: (data) => api.post('/auth/login', data),
 };
 
@@ -47,6 +66,40 @@ export const predictionsAPI = {
 export const cropsAPI = {
   getAll: () => api.get('/crops'),
   getByRegion: (region) => api.get(`/crops/region/${region}`),
+  // Crop image analysis endpoints
+  analyzeCrop: (formData) => api.post('/crops/analyze', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
+  getAnalyses: () => api.get('/crops/analyses'),
+  getAnalysis: (id) => api.get(`/crops/analyses/${id}`),
+  linkAnalysisToFarm: (analysisId, farmId) => api.post(`/crops/analyses/${analysisId}/link-farm`, { farmId }),
+  
+  // NEW: Market intelligence endpoints
+  analyzeImageWithMarket: (formData) => api.post('/crops/analyze-image', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
+  getCropMarketData: (cropName, area = 1) => api.get(`/crops/market-data/${cropName}`, { params: { area } }),
+  getBestInvestment: (area = 1) => api.get('/crops/best-investment', { params: { area } }),
+  compareCrops: (payload) => api.post('/crops/compare', payload),
+};
+
+export const dashboardAPI = {
+  getDashboard: () => api.get('/dashboard'),
+};
+
+export const chatAPI = {
+  sendMessage: (message, sessionId = null) => api.post('/chat/message', {
+    message,
+    sessionId,
+    language: 'en',
+    streaming: false
+  }),
+  getSessions: () => api.get('/chat/sessions'),
+  createSession: (title) => api.post('/chat/sessions', { title }),
 };
 
 export default api;

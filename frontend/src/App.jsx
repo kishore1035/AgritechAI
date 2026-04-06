@@ -1,6 +1,7 @@
 import { useState, Component } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
+import { AuthProvider } from './context/AuthContext';
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -20,17 +21,21 @@ class ErrorBoundary extends Component {
 }
 
 import './i18n';
-import Login              from './pages/Login';
-import Register           from './pages/Register';
-import Dashboard          from './pages/Dashboard';
-import FarmsList          from './pages/FarmsList';
-import AddFarm            from './pages/AddFarm';
-import SoilAnalysis       from './pages/SoilAnalysis';
-import AIChat             from './pages/AIChat';
-import CropRecommendation from './pages/CropRecommendation';
-import WeatherAlerts      from './pages/WeatherAlerts';
-import SoilHealth         from './pages/SoilHealth';
-import FarmProfile        from './pages/FarmProfile';
+import Login                from './pages/Login';
+import Register             from './pages/Register';
+import Dashboard            from './pages/Dashboard';
+import FarmsList            from './pages/FarmsList';
+import AddFarm              from './pages/AddFarm';
+import SoilAnalysis         from './pages/SoilAnalysis';
+import AIChat               from './pages/AIChat';
+import CropRecommendation   from './pages/CropRecommendation';
+import WeatherAlerts        from './pages/WeatherAlerts';
+import SoilHealth           from './pages/SoilHealth';
+import FarmProfile          from './pages/FarmProfile';
+import PlantScanner         from './pages/PlantScanner';
+import MarketAnalyzer       from './components/MarketAnalyzer';
+import FarmPulse            from './pages/FarmPulse';
+import CropRotationPlanner  from './pages/CropRotationPlanner';
 
 const transition = { duration: 0.28, ease: [0.16, 1, 0.3, 1] };
 
@@ -50,17 +55,24 @@ function AnimatedRoutes({ isAuthenticated, setIsAuthenticated }) {
         style={{ minHeight: '100dvh' }}
       >
         <Routes location={location}>
+          {/* ── Default route ──────────────────── */}
+          <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} />} />
+
           {/* ── Public routes ──────────────────── */}
           <Route path="/login"    element={!isAuthenticated ? <Login    {...authProps} /> : <Navigate to="/dashboard" />} />
           <Route path="/register" element={!isAuthenticated ? <Register {...authProps} /> : <Navigate to="/dashboard" />} />
 
           {/* ── Authenticated routes ───────────── */}
-          <Route path="/dashboard"        element={isAuthenticated ? <Dashboard />          : <Navigate to="/login" />} />
-          <Route path="/chat"             element={isAuthenticated ? <AIChat />             : <Navigate to="/login" />} />
-          <Route path="/crops"            element={isAuthenticated ? <CropRecommendation /> : <Navigate to="/login" />} />
-          <Route path="/weather"          element={isAuthenticated ? <WeatherAlerts />      : <Navigate to="/login" />} />
-          <Route path="/soil"             element={isAuthenticated ? <SoilHealth />         : <Navigate to="/login" />} />
-          <Route path="/profile"          element={isAuthenticated ? <FarmProfile />        : <Navigate to="/login" />} />
+          <Route path="/dashboard"           element={isAuthenticated ? <Dashboard />             : <Navigate to="/login" />} />
+          <Route path="/farm-pulse"          element={isAuthenticated ? <FarmPulse />             : <Navigate to="/login" />} />
+          <Route path="/crop-rotation"       element={isAuthenticated ? <CropRotationPlanner />  : <Navigate to="/login" />} />
+          <Route path="/chat"                element={isAuthenticated ? <AIChat />                : <Navigate to="/login" />} />
+          <Route path="/crops"               element={isAuthenticated ? <CropRecommendation />  : <Navigate to="/login" />} />
+          <Route path="/scanner"             element={isAuthenticated ? <PlantScanner />        : <Navigate to="/login" />} />
+          <Route path="/market"              element={isAuthenticated ? <MarketAnalyzer />      : <Navigate to="/login" />} />
+          <Route path="/weather"             element={isAuthenticated ? <WeatherAlerts />       : <Navigate to="/login" />} />
+          <Route path="/soil"                element={isAuthenticated ? <SoilHealth />          : <Navigate to="/login" />} />
+          <Route path="/profile"             element={isAuthenticated ? <FarmProfile />         : <Navigate to="/login" />} />
 
           {/* ── Legacy routes (keep existing backend integration) */}
           <Route path="/farms"            element={isAuthenticated ? <FarmsList />          : <Navigate to="/login" />} />
@@ -76,12 +88,17 @@ function AnimatedRoutes({ isAuthenticated, setIsAuthenticated }) {
 }
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
+  // Only authenticated if token exists AND is not expired
+  const token = localStorage.getItem('token');
+  const [isAuthenticated, setIsAuthenticated] = useState(!!token);
+  
   return (
     <ErrorBoundary>
-      <Router>
-        <AnimatedRoutes isAuthenticated={isAuthenticated} setIsAuthenticated={setIsAuthenticated} />
-      </Router>
+      <AuthProvider>
+        <Router>
+          <AnimatedRoutes isAuthenticated={isAuthenticated} setIsAuthenticated={setIsAuthenticated} />
+        </Router>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

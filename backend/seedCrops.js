@@ -1,6 +1,6 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Crop = require('./models/Crop');
-require('dotenv').config();
 
 const crops = [
   {
@@ -95,15 +95,23 @@ const crops = [
   }
 ];
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/agritech')
-.then(async () => {
-  console.log('Connected to MongoDB');
-  await Crop.deleteMany({});
-  await Crop.insertMany(crops);
-  console.log('✅ Crop database seeded successfully');
-  process.exit(0);
-})
-.catch(err => {
-  console.error('❌ Error:', err);
-  process.exit(1);
-});
+async function run() {
+  try {
+    if (process.env.LOCAL_DB !== 'true') {
+      await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/agritech');
+      console.log('Connected to MongoDB');
+    } else {
+      console.log('Using LOCAL_DB (JSON file)');
+    }
+
+    await Crop.deleteMany({});
+    await Crop.insertMany(crops);
+    console.log('✅ Crop database seeded successfully');
+    process.exit(0);
+  } catch (err) {
+    console.error('❌ Error:', err);
+    process.exit(1);
+  }
+}
+
+run();

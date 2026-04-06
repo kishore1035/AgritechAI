@@ -1,3 +1,7 @@
+if (process.env.LOCAL_DB === 'true') {
+  const { createLocalModel } = require('../config/localDb');
+  module.exports = createLocalModel('weatherCache', { timestamps: true });
+} else {
 const mongoose = require('mongoose');
 
 /**
@@ -64,3 +68,4 @@ weatherCacheSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 weatherCacheSchema.index({ locationKey: 1 });
 
 module.exports = mongoose.model('WeatherCache', weatherCacheSchema);
+}

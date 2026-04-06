@@ -3,34 +3,51 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Send, Mic, Sprout, User, Zap, Leaf, Droplets,
   CloudSun, FlaskConical, ChevronRight, Volume2,
-  RotateCcw, Sparkles
+  RotateCcw, Sparkles, Loader, AlertTriangle
 } from 'lucide-react';
 import Layout from '../components/Layout';
+import api from '../services/api';
 
-/* ── Mock AI response engine ───────────────────── */
-const AI_RESPONSES = {
-  default: [
-    "Based on your farm data, your wheat crop is currently at 65% of the flowering stage. Soil moisture is at 38% — I recommend a light irrigation of about 25mm tomorrow morning for optimal grain set.",
-    "Your soil pH is 6.8, which is ideal for wheat. However, I'm detecting early signs of Nitrogen depletion. Consider a urea top-dressing of 30kg/acre within the next 5 days for best results.",
-    "Weather forecast shows 60% chance of rain in 3 days. I suggest delaying your planned pesticide application by 4 days to avoid washout and maximize effectiveness.",
-    "Your farm health score is 84/100 — excellent! The main opportunity is improving soil organic matter in Field B. I recommend incorporating crop residue after harvest.",
-    "Considering your soil type (sandy loam) and current season, Chickpea would be an excellent choice for your next Rabi crop with a 92% match score. It'll also fix atmospheric Nitrogen naturally.",
-  ],
-  greeting: "Hello! I'm your AgriTech AI assistant. I have full access to your farm data, soil analysis, and local weather forecasts. How can I help you today? You can ask me about crop recommendations, soil health, pest management, or irrigation planning.",
-};
+/* ── Helper Functions ──────────────────────────────── */
+function generateQuickSuggestions(farmData) {
+  const suggestions = [
+    { text: 'How is my soil health?', icon: FlaskConical },
+    { text: 'Tomorrow\'s weather outlook', icon: CloudSun },
+    { text: 'Irrigation schedule', icon: Droplets },
+  ];
 
-const QUICK_SUGGESTIONS = [
-  { text: 'Best crops for Rabi season?', icon: Leaf },
-  { text: 'How is my soil health?',      icon: FlaskConical },
-  { text: 'Tomorrow\'s weather outlook', icon: CloudSun },
-  { text: 'Irrigation schedule',         icon: Droplets },
-];
+  // Add context-specific suggestions based on farm data
+  if (farmData?.soil?.pH < 6.0) {
+    suggestions.unshift({ text: 'How to improve soil pH?', icon: Leaf });
+  } else if (farmData?.soil?.N < 150) {
+    suggestions.unshift({ text: 'Best nitrogen fertilizers?', icon: Zap });
+  } else {
+    suggestions.unshift({ text: 'Best crops for this season?', icon: Leaf });
+  }
 
-const CHAT_HISTORY = [
-  { id: 'h1', title: 'Crop rotation advice', date: '2 days ago',  preview: 'Chickpea after wheat...' },
-  { id: 'h2', title: 'Pest management tips', date: '4 days ago',  preview: 'Aphid detection in...' },
-  { id: 'h3', title: 'Fertilizer planning',  date: '1 week ago',  preview: 'NPK ratio for wheat...' },
-];
+  return suggestions;
+}
+
+async function callChatAPI(message, sessionId = null) {
+  try {
+    const response = await api.post('/chat/message', {
+      message,
+      sessionId,
+      language: 'en',
+      streaming: false
+    });
+    
+    return {
+      response: response.data.response,
+      sessionId: response.data.sessionId,
+      messageId: response.data.messageId,
+      sources: response.data.ragSources || []
+    };
+  } catch (error) {
+    console.error('Chat API error:', error);
+    throw new Error(error.response?.data?.error || 'Failed to get AI response');
+  }
+}
 
 function TypingIndicator() {
   return (
@@ -79,14 +96,21 @@ function MessageBubble({ msg }) {
       <div className={`max-w-[78%] md:max-w-[65%] ${isAI ? 'mr-8' : 'ml-8'}`}>
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
           isAI
-            ? 'glass-light border border-brand/10 text-neutral-100 rounded-bl-sm'
+            ? msg.isError 
+              ? 'bg-alert/10 border border-alert/20 text-alert rounded-bl-sm'
+              : 'glass-light border border-brand/10 text-neutral-100 rounded-bl-sm'
             : 'bg-brand text-neutral-950 font-medium rounded-br-sm'
         }`}>
           {msg.text}
         </div>
-        <p className={`text-[10px] text-neutral-600 mt-1 ${isAI ? 'text-left' : 'text-right'}`}>
-          {msg.time}
-        </p>
+        <div className={`mt-1 ${isAI ? 'text-left' : 'text-right'}`}>
+          <p className="text-[10px] text-neutral-600">{msg.time}</p>
+          {msg.sources && msg.sources.length > 0 && (
+            <p className="text-[9px] text-neutral-700 mt-0.5">
+              Sources: {msg.sources.join(', ')}
+            </p>
+          )}
+        </div>
       </div>
     </motion.div>
   );
@@ -94,36 +118,166 @@ function MessageBubble({ msg }) {
 
 export default function AIChat() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const [messages, setMessages] = useState([
-    { id: 1, role: 'ai', text: AI_RESPONSES.greeting, time: 'Just now' },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [responseIdx, setResponseIdx] = useState(0);
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
+  const [chatSessions, setChatSessions] = useState([]);
+  const [farmData, setFarmData] = useState(null);
+  const [quickSuggestions, setQuickSuggestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    const initializeChat = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch farm data for context
+        const dashboardResponse = await api.get('/dashboard');
+        setFarmData(dashboardResponse.data);
+        
+        // Generate suggestions based on farm data
+        const suggestions = generateQuickSuggestions(dashboardResponse.data);
+        setQuickSuggestions(suggestions);
+        
+        // Try to fetch chat sessions
+        try {
+          const sessionsResponse = await api.get('/chat/sessions');
+          setChatSessions(sessionsResponse.data.sessions || []);
+        } catch (sessionErr) {
+          console.warn('Could not fetch chat sessions:', sessionErr);
+          setChatSessions([]);
+        }
+        
+        // Set initial greeting
+        setMessages([{
+          id: 1,
+          role: 'ai',
+          text: "Hello! I'm your AgriTech AI assistant. I have access to your farm data, soil analysis, and weather forecasts. How can I help you today?",
+          time: 'Just now'
+        }]);
+        
+      } catch (err) {
+        console.error('Failed to initialize chat:', err);
+        setError(err.response?.data?.error || 'Failed to load chat');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeChat();
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex h-[calc(100dvh-4rem)] md:h-screen overflow-hidden">
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4">
+              <Loader className="w-8 h-8 text-brand animate-spin" />
+              <p className="text-neutral-400">Loading AI assistant...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="flex h-[calc(100dvh-4rem)] md:h-screen overflow-hidden">
+          <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <AlertTriangle className="w-8 h-8 text-alert" />
+              <p className="text-neutral-400">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-brand/10 border border-brand/20 rounded-xl text-brand hover:bg-brand/20 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   const sendMessage = async (text) => {
     const txt = (text || input).trim();
     if (!txt) return;
+    
     setInput('');
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setMessages(prev => [...prev, { id: Date.now(), role: 'user', text: txt, time: now }]);
+    
+    // Add user message
+    const userMessage = { id: Date.now(), role: 'user', text: txt, time: now };
+    setMessages(prev => [...prev, userMessage]);
     setIsTyping(true);
-    await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
-    const response = AI_RESPONSES.default[responseIdx % AI_RESPONSES.default.length];
-    setResponseIdx(i => i + 1);
-    setIsTyping(false);
-    setMessages(prev => [...prev, { id: Date.now() + 1, role: 'ai', text: response, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    
+    try {
+      // Call real API
+      const result = await callChatAPI(txt, currentSessionId);
+      
+      // Update session ID if new
+      if (!currentSessionId && result.sessionId) {
+        setCurrentSessionId(result.sessionId);
+      }
+      
+      // Add AI response
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'ai',
+        text: result.response,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        sources: result.sources
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      
+      // Add error message
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'ai',
+        text: `Sorry, I encountered an error: ${err.message}. Please try again.`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isError: true
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const startNewChat = () => {
+    setMessages([{
+      id: 1,
+      role: 'ai',
+      text: "Hello! I'm your AgriTech AI assistant. I have access to your farm data, soil analysis, and weather forecasts. How can I help you today?",
+      time: 'Just now'
+    }]);
+    setCurrentSessionId(null);
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey) { 
+      e.preventDefault(); 
+      sendMessage(); 
+    }
   };
 
   const spring = { type: 'spring', stiffness: 80, damping: 16 };
@@ -139,7 +293,7 @@ export default function AIChat() {
           </div>
           {/* New chat */}
           <button
-            onClick={() => { setMessages([{ id: 1, role: 'ai', text: AI_RESPONSES.greeting, time: 'Just now' }]); setResponseIdx(0); }}
+            onClick={startNewChat}
             className="flex items-center gap-2.5 mx-3 mt-3 p-3 rounded-2xl glass-light border border-brand/15 hover:border-brand/30 transition-colors group"
           >
             <div className="w-7 h-7 bg-brand/15 rounded-xl flex items-center justify-center group-hover:bg-brand/25 transition-colors">
@@ -149,11 +303,11 @@ export default function AIChat() {
           </button>
           {/* History list */}
           <div className="flex-1 overflow-y-auto py-3 space-y-1 px-3">
-            {CHAT_HISTORY.map(({ id, title, date, preview }) => (
-              <button key={id} className="w-full text-left p-3 rounded-xl hover:bg-white/[0.04] transition-colors group">
+            {chatSessions.map(({ _id, title, lastMessageAt, messageCount }) => (
+              <button key={_id} className="w-full text-left p-3 rounded-xl hover:bg-white/[0.04] transition-colors group">
                 <p className="text-xs font-semibold text-neutral-300 group-hover:text-neutral-100 transition-colors truncate">{title}</p>
-                <p className="text-[10px] text-neutral-600 mt-0.5 truncate">{preview}</p>
-                <p className="text-[10px] text-neutral-700 mt-1">{date}</p>
+                <p className="text-[10px] text-neutral-600 mt-0.5 truncate">{messageCount} messages</p>
+                <p className="text-[10px] text-neutral-700 mt-1">{new Date(lastMessageAt).toLocaleDateString()}</p>
               </button>
             ))}
           </div>
@@ -190,7 +344,7 @@ export default function AIChat() {
             </div>
             <div className="ml-auto flex items-center gap-2">
               <button
-                onClick={() => { setMessages([{ id: 1, role: 'ai', text: AI_RESPONSES.greeting, time: 'Just now' }]); setResponseIdx(0); }}
+                onClick={startNewChat}
                 className="p-2 rounded-xl text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.06] transition-all"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -236,7 +390,7 @@ export default function AIChat() {
               animate={{ opacity: 1, y: 0 }}
               className="px-4 pb-3 flex flex-wrap gap-2"
             >
-              {QUICK_SUGGESTIONS.map(({ text, icon: Icon }) => (
+              {quickSuggestions.map(({ text, icon: Icon }) => (
                 <button
                   key={text}
                   onClick={() => sendMessage(text)}

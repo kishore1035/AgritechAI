@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   FlaskConical, Thermometer, Droplets, Leaf, TrendingUp,
   TrendingDown, AlertTriangle, CheckCircle2, Info,
-  Layers, Wind, Zap, ArrowRight
+  Layers, Wind, Zap, ArrowRight, Loader
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -11,38 +11,14 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import api from '../services/api';
 
-/* ── Data ──────────────────────────────────────── */
-const NUTRIENTS = [
-  { name: 'Nitrogen',   symbol: 'N', value: 68, unit: 'kg/ha', status: 'Medium', trend: 'down', color: 'sky',     max: 120 },
-  { name: 'Phosphorus', symbol: 'P', value: 42, unit: 'kg/ha', status: 'Good',   trend: 'stable', color: 'harvest', max: 80 },
-  { name: 'Potassium',  symbol: 'K', value: 89, unit: 'kg/ha', status: 'Good',   trend: 'up',  color: 'brand',   max: 120 },
-  { name: 'Sulfur',     symbol: 'S', value: 18, unit: 'mg/kg', status: 'Low',    trend: 'down', color: 'alert',   max: 50 },
-  { name: 'Zinc',       symbol: 'Zn', value: 1.8, unit: 'mg/kg', status: 'Low',  trend: 'stable', color: 'lavender', max: 5 },
-  { name: 'Organic C',  symbol: 'OC', value: 0.65, unit: '%',  status: 'Low',    trend: 'down', color: 'harvest', max: 2 },
-];
-
-const RADAR_DATA = [
-  { subject: 'pH',      A: 85 },
-  { subject: 'Nitrogen', A: 57 },
-  { subject: 'Phosphorus', A: 70 },
-  { subject: 'Potassium', A: 74 },
-  { subject: 'Organic', A: 33 },
-  { subject: 'Moisture', A: 62 },
-];
-
+/* ── Static Data (Soil Layers - can remain static) ── */
 const LAYERS = [
   { depth: '0–15 cm',   label: 'Topsoil',     color: 'bg-amber-800/60',  desc: 'Rich organic matter, best for roots' },
   { depth: '15–30 cm',  label: 'Sub-topsoil', color: 'bg-amber-700/50',  desc: 'Clay content higher, some compaction' },
   { depth: '30–60 cm',  label: 'Subsoil',     color: 'bg-amber-600/40',  desc: 'Reduced pore space, limited root penetration' },
   { depth: '60–90 cm',  label: 'Parent rock', color: 'bg-stone-600/30',  desc: 'Weathered material, low biological activity' },
-];
-
-const RECS = [
-  { icon: TrendingUp,    color: 'brand',   title: 'Apply Urea (top-dressing)',  body: '30 kg/acre — address Nitrogen decline before tillering ends. Best applied after light rain or irrigation.' },
-  { icon: Zap,           color: 'sky',     title: 'Add Sulfur micronutrients',  body: 'Sulfur at 10 kg/acre is recommended. Deficiency shows as yellowing of new leaves.' },
-  { icon: Leaf,          color: 'harvest', title: 'Improve Organic Carbon',     body: 'Incorporate green manure or compost. Target OC > 1.0% over 2 seasons for soil structure improvement.' },
-  { icon: CheckCircle2,  color: 'brand',   title: 'Potassium levels — good',    body: 'No action needed this season. Monitor post-harvest.' },
 ];
 
 const colorMap = {
@@ -52,6 +28,115 @@ const colorMap = {
   alert:   { bar: 'bg-alert',   text: 'text-alert',   badge: 'bg-alert/15 text-alert border-alert/25',   icon: 'text-alert' },
   lavender:{ bar: 'bg-lavender',text: 'text-lavender',badge: 'bg-lavender/15 text-lavender border-lavender/25', icon: 'text-lavender' },
 };
+
+/* ── Helper Functions ──────────────────────────────── */
+function generateNutrientsFromSoil(soilData) {
+  if (!soilData) return [];
+  
+  const nutrients = [
+    {
+      name: 'Nitrogen', symbol: 'N', value: soilData.N || 0, unit: 'kg/ha',
+      status: soilData.N > 200 ? 'Good' : soilData.N > 100 ? 'Medium' : 'Low',
+      trend: 'stable', color: 'sky', max: 300
+    },
+    {
+      name: 'Phosphorus', symbol: 'P', value: soilData.P || 0, unit: 'kg/ha',
+      status: soilData.P > 35 ? 'Good' : soilData.P > 20 ? 'Medium' : 'Low',
+      trend: 'stable', color: 'harvest', max: 80
+    },
+    {
+      name: 'Potassium', symbol: 'K', value: soilData.K || 0, unit: 'kg/ha',
+      status: soilData.K > 200 ? 'Good' : soilData.K > 100 ? 'Medium' : 'Low',
+      trend: 'stable', color: 'brand', max: 300
+    },
+    {
+      name: 'Sulfur', symbol: 'S', value: soilData.sulfur || 0, unit: 'mg/kg',
+      status: soilData.sulfur > 25 ? 'Good' : soilData.sulfur > 12 ? 'Medium' : 'Low',
+      trend: 'stable', color: 'alert', max: 50
+    },
+    {
+      name: 'Zinc', symbol: 'Zn', value: soilData.zinc || 0, unit: 'mg/kg',
+      status: soilData.zinc > 2.5 ? 'Good' : soilData.zinc > 1.0 ? 'Medium' : 'Low',
+      trend: 'stable', color: 'lavender', max: 5
+    },
+    {
+      name: 'Organic C', symbol: 'OC', value: soilData.organicCarbon || 0, unit: '%',
+      status: soilData.organicCarbon > 1.0 ? 'Good' : soilData.organicCarbon > 0.5 ? 'Medium' : 'Low',
+      trend: 'stable', color: 'harvest', max: 2
+    }
+  ];
+
+  return nutrients;
+}
+
+function generateRadarData(soilData) {
+  if (!soilData) return [];
+  
+  return [
+    { subject: 'pH', A: Math.min((soilData.pH || 6.5) * 14, 100) },
+    { subject: 'Nitrogen', A: Math.min(((soilData.N || 0) / 300) * 100, 100) },
+    { subject: 'Phosphorus', A: Math.min(((soilData.P || 0) / 80) * 100, 100) },
+    { subject: 'Potassium', A: Math.min(((soilData.K || 0) / 300) * 100, 100) },
+    { subject: 'Organic', A: Math.min(((soilData.organicCarbon || 0) / 2) * 100, 100) },
+    { subject: 'Moisture', A: Math.min((soilData.moisture || 0), 100) },
+  ];
+}
+
+function generateRecommendations(soilData) {
+  if (!soilData) return [];
+  
+  const recommendations = [];
+  
+  // Nitrogen recommendations
+  if (soilData.N < 150) {
+    recommendations.push({
+      icon: TrendingUp, color: 'brand',
+      title: 'Apply Nitrogen fertilizer',
+      body: `Nitrogen is ${soilData.N < 100 ? 'critically low' : 'below optimal'}. Consider urea application of ${Math.ceil((200 - soilData.N) / 10) * 10} kg/ha.`
+    });
+  }
+  
+  // Phosphorus recommendations
+  if (soilData.P < 25) {
+    recommendations.push({
+      icon: Zap, color: 'sky',
+      title: 'Add Phosphorus fertilizer',
+      body: `Phosphorus levels are low. Apply DAP or SSP at ${Math.ceil((35 - soilData.P) / 5) * 5} kg/ha for better root development.`
+    });
+  }
+  
+  // Organic carbon recommendations
+  if (soilData.organicCarbon < 0.75) {
+    recommendations.push({
+      icon: Leaf, color: 'harvest',
+      title: 'Improve Organic Matter',
+      body: 'Organic carbon is low. Incorporate compost, green manure, or crop residue to improve soil structure and nutrient retention.'
+    });
+  }
+  
+  // pH recommendations
+  if (soilData.pH < 6.0) {
+    recommendations.push({
+      icon: AlertTriangle, color: 'alert',
+      title: 'Soil is acidic',
+      body: `pH is ${soilData.pH}. Apply lime at 500-750 kg/ha to raise pH to optimal range (6.0-7.5) for better nutrient availability.`
+    });
+  } else if (soilData.pH > 8.0) {
+    recommendations.push({
+      icon: AlertTriangle, color: 'alert',
+      title: 'Soil is alkaline',
+      body: `pH is ${soilData.pH}. Apply gypsum or organic matter to lower pH and improve nutrient uptake.`
+    });
+  } else {
+    recommendations.push({
+      icon: CheckCircle2, color: 'brand',
+      title: 'pH levels optimal',
+      body: `Soil pH (${soilData.pH}) is in the ideal range. Continue current management practices.`
+    });
+  }
+  
+  return recommendations;
+}
 
 function PHGauge({ value = 6.8 }) {
   const min = 4, max = 9, range = max - min;
@@ -145,6 +230,72 @@ function NutrientRow({ nutrient, index }) {
 
 export default function SoilHealth() {
   const navigate = useNavigate();
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get('/dashboard');
+        setDashboardData(response.data);
+      } catch (err) {
+        console.error('Failed to fetch dashboard data:', err);
+        setError(err.response?.data?.error || 'Failed to load soil health data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="px-4 py-6 md:px-8 md:py-8 max-w-5xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-4">
+              <Loader className="w-8 h-8 text-brand animate-spin" />
+              <p className="text-neutral-400">Loading soil health data...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="px-4 py-6 md:px-8 md:py-8 max-w-5xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <AlertTriangle className="w-8 h-8 text-alert" />
+              <p className="text-neutral-400">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-brand/10 border border-brand/20 rounded-xl text-brand hover:bg-brand/20 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Generate data from API response
+  const soilData = dashboardData?.soil;
+  const nutrients = generateNutrientsFromSoil(soilData);
+  const radarData = generateRadarData(soilData);
+  const recommendations = generateRecommendations(soilData);
+  const farm = dashboardData?.farm;
+  const healthScore = dashboardData?.healthScore || soilData?.healthScore || 70;
 
   return (
     <Layout>
@@ -166,7 +317,9 @@ export default function SoilHealth() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="font-display text-3xl font-bold text-neutral-50">Soil Health</h1>
-              <p className="text-neutral-500 text-sm mt-1">Field A (4.2 ha) · Last tested 3 days ago</p>
+              <p className="text-neutral-500 text-sm mt-1">
+                {farm?.name || 'My Farm'} ({farm?.landSize || '4.2'} ha) · Last tested {soilData?.lastTested ? new Date(soilData.lastTested).toLocaleDateString() : '3 days ago'}
+              </p>
             </div>
             <button
               onClick={() => navigate('/farms')}
@@ -188,7 +341,7 @@ export default function SoilHealth() {
             className="glass rounded-3xl p-5 flex flex-col items-center justify-center border border-brand/10"
           >
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-4">Soil pH</p>
-            <PHGauge value={6.8} />
+            <PHGauge value={soilData?.pH || 6.8} />
           </motion.div>
 
           {/* Radar chart */}
@@ -201,7 +354,7 @@ export default function SoilHealth() {
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Nutrient Balance</p>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={RADAR_DATA}>
+                <RadarChart data={radarData}>
                   <PolarGrid stroke="rgba(255,255,255,0.06)" />
                   <PolarAngleAxis dataKey="subject" tick={{ fill: '#4a6b4c', fontSize: 10 }} />
                   <Radar
@@ -227,10 +380,12 @@ export default function SoilHealth() {
           >
             <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-4">Overall Score</p>
             <div className="flex flex-col items-center my-2">
-              <span className="font-display text-5xl font-bold gradient-text-brand">68</span>
+              <span className="font-display text-5xl font-bold gradient-text-brand">{healthScore}</span>
               <span className="text-xs text-neutral-500 mt-1">/100</span>
               <div className="mt-3 px-3 py-1.5 bg-harvest/10 border border-harvest/20 rounded-full">
-                <span className="text-xs font-bold text-harvest">Needs Attention</span>
+                <span className="text-xs font-bold text-harvest">
+                  {healthScore >= 80 ? 'Excellent' : healthScore >= 70 ? 'Good' : healthScore >= 60 ? 'Needs Attention' : 'Poor'}
+                </span>
               </div>
             </div>
             <div className="space-y-1.5 mt-3">
@@ -269,7 +424,7 @@ export default function SoilHealth() {
           >
             <p className="text-sm font-bold text-neutral-200 mb-4">Nutrient Levels</p>
             <div className="space-y-3.5">
-              {NUTRIENTS.map((n, i) => <NutrientRow key={n.name} nutrient={n} index={i} />)}
+              {nutrients.map((n, i) => <NutrientRow key={n.name} nutrient={n} index={i} />)}
             </div>
           </motion.div>
 
@@ -311,18 +466,20 @@ export default function SoilHealth() {
                 <p className="text-xs font-bold text-sky">Moisture Status</p>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-400">Current: <strong className="text-neutral-200">38%</strong></span>
+                <span className="text-xs text-neutral-400">Current: <strong className="text-neutral-200">{soilData?.moisture || 38}%</strong></span>
                 <span className="text-xs text-neutral-400">Field capacity: <strong className="text-neutral-200">45%</strong></span>
               </div>
               <div className="mt-2 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: '38%' }}
+                  animate={{ width: `${soilData?.moisture || 38}%` }}
                   transition={{ delay: 0.7, duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                   className="h-full bg-sky rounded-full"
                 />
               </div>
-              <p className="text-[10px] text-sky/70 mt-1.5">⚠ Below field capacity — irrigation recommended</p>
+              <p className="text-[10px] text-sky/70 mt-1.5">
+                {(soilData?.moisture || 38) < 45 ? '⚠ Below field capacity — irrigation recommended' : '✓ Adequate moisture levels'}
+              </p>
             </div>
           </motion.div>
         </div>
@@ -339,7 +496,7 @@ export default function SoilHealth() {
             <p className="text-sm font-bold text-neutral-200">AI Recommendations</p>
           </div>
           <div className="grid md:grid-cols-2 gap-3">
-            {RECS.map(({ icon: Ic, color, title, body }, i) => {
+            {recommendations.map(({ icon: Ic, color, title, body }, i) => {
               const c = colorMap[color] || colorMap.brand;
               return (
                 <motion.div

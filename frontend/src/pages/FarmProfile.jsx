@@ -1,27 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   User, MapPin, Phone, Sprout, Leaf, FlaskConical,
   Calendar, Edit3, Check, X, LogOut, ChevronRight,
   Wheat, Sun, Droplets, TrendingUp, Award, Clock,
-  Plus, Camera, Shield
+  Plus, Camera, Shield, Loader, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
+import { farmsAPI } from '../services/api';
+import api from '../services/api';
 
-/* ── Mock data ─────────────────────────────────── */
-const CROP_HISTORY = [
-  { crop: 'Wheat',   season: 'Rabi 2024-25',  yield: '3.8 t/ha', status: 'active',    icon: Wheat, color: 'brand' },
-  { crop: 'Soybean', season: 'Kharif 2024',   yield: '2.4 t/ha', status: 'harvested', icon: Sprout, color: 'harvest' },
-  { crop: 'Chickpea',season: 'Rabi 2023-24',  yield: '1.6 t/ha', status: 'harvested', icon: Leaf,  color: 'sky' },
-  { crop: 'Maize',   season: 'Kharif 2023',   yield: '5.9 t/ha', status: 'harvested', icon: Wheat, color: 'lavender' },
-];
+/* ── Helper Functions ──────────────────────────────── */
+function generateCropHistoryFromFarm(farm) {
+  if (!farm?.croppingHistory) return [];
+  
+  const iconMap = {
+    wheat: Wheat, rice: Wheat, soybean: Sprout,
+    chickpea: Sprout, maize: Wheat, mustard: Leaf,
+    cotton: Leaf, sugarcane: Wheat
+  };
+  
+  const colorMap = {
+    wheat: 'brand', rice: 'sky', soybean: 'harvest',
+    chickpea: 'sky', maize: 'lavender', mustard: 'harvest'
+  };
+  
+  return farm.croppingHistory.slice(-4).map((crop, index) => ({
+    crop: crop.crop || crop.cropName || 'Unknown',
+    season: crop.season || `Season ${index + 1}`,
+    yield: crop.yield || '2.0 t/ha',
+    status: index === 0 ? 'active' : 'harvested',
+    icon: iconMap[crop.crop?.toLowerCase()] || Wheat,
+    color: colorMap[crop.crop?.toLowerCase()] || 'brand'
+  }));
+}
 
-const ACHIEVEMENTS = [
-  { icon: Award,    label: 'Top Yielder',       desc: 'Wheat yield above regional avg', color: 'harvest' },
-  { icon: Droplets, label: 'Water Saver',        desc: 'Saved 18% irrigation water',    color: 'sky' },
-  { icon: Shield,   label: 'Soil Guardian',      desc: 'pH maintained for 2 seasons',   color: 'brand' },
-];
+function generateAchievementsFromFarm(farm, dashboardData) {
+  const achievements = [];
+  const healthScore = dashboardData?.healthScore || 70;
+  
+  // Health-based achievements
+  if (healthScore >= 80) {
+    achievements.push({
+      icon: Award,
+      label: 'Farm Health Champion',
+      desc: `Soil health score of ${healthScore}/100`,
+      color: 'brand'
+    });
+  }
+  
+  // Crop diversity achievement
+  if (farm?.croppingHistory?.length > 2) {
+    const uniqueCrops = [...new Set(farm.croppingHistory.map(c => c.crop))];
+    if (uniqueCrops.length >= 3) {
+      achievements.push({
+        icon: Leaf,
+        label: 'Crop Diversity Expert',
+        desc: `Grown ${uniqueCrops.length} different crops`,
+        color: 'harvest'
+      });
+    }
+  }
+  
+  // Sustainable farming
+  if (farm?.irrigationType === 'drip') {
+    achievements.push({
+      icon: Droplets,
+      label: 'Water Conservation Hero',
+      desc: 'Using efficient drip irrigation',
+      color: 'sky'
+    });
+  }
+  
+  // Soil guardian (good pH maintenance)
+  const soilData = dashboardData?.soil;
+  if (soilData?.pH >= 6.0 && soilData?.pH <= 7.5) {
+    achievements.push({
+      icon: Shield,
+      label: 'Soil Guardian',
+      desc: `pH maintained at optimal ${soilData.pH}`,
+      color: 'brand'
+    });
+  }
+  
+  return achievements.length > 0 ? achievements : [
+    { icon: Sprout, label: 'Getting Started', desc: 'Beginning your farming journey', color: 'brand' }
+  ];
+}
 
 const colorMap = {
   brand:   { bg: 'bg-brand/10 border-brand/20',   text: 'text-brand',   dot: 'bg-brand' },
@@ -81,10 +147,92 @@ export default function FarmProfile() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [activeTab, setActiveTab] = useState('overview');
+  const [farm, setFarm] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const TABS = ['overview', 'history', 'achievements'];
 
-  const handleLogout = () => { localStorage.clear(); navigate('/login'); };
+  useEffect(() => {
+    const fetchFarmData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch dashboard data which includes farm info
+        const dashboardResponse = await api.get('/dashboard');
+        setDashboardData(dashboardResponse.data);
+        
+        // If we have a farm ID, fetch detailed farm data
+        if (dashboardResponse.data?.farm?._id) {
+          try {
+            const farmResponse = await farmsAPI.getOne(dashboardResponse.data.farm._id);
+            setFarm(farmResponse.data);
+          } catch (farmErr) {
+            // If individual farm fetch fails, use farm data from dashboard
+            setFarm(dashboardResponse.data.farm);
+          }
+        } else {
+          setFarm(dashboardResponse.data?.farm);
+        }
+      } catch (err) {
+        console.error('Failed to fetch farm data:', err);
+        setError(err.response?.data?.error || 'Failed to load farm profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFarmData();
+  }, []);
+
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="px-4 py-6 md:px-8 md:py-8 max-w-4xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-4">
+              <Loader className="w-8 h-8 text-brand animate-spin" />
+              <p className="text-neutral-400">Loading farm profile...</p>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="px-4 py-6 md:px-8 md:py-8 max-w-4xl mx-auto">
+          <div className="flex items-center justify-center h-96">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <AlertTriangle className="w-8 h-8 text-alert" />
+              <p className="text-neutral-400">{error}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="px-4 py-2 bg-brand/10 border border-brand/20 rounded-xl text-brand hover:bg-brand/20 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Generate data from API
+  const cropHistory = generateCropHistoryFromFarm(farm);
+  const achievements = generateAchievementsFromFarm(farm, dashboardData);
+  const healthScore = dashboardData?.healthScore || 70;
+
+  const handleLogout = () => { 
+    localStorage.clear(); 
+    navigate('/login'); 
+  };
 
   return (
     <Layout>
@@ -125,23 +273,23 @@ export default function FarmProfile() {
             {/* Name & info */}
             <div className="flex-1 min-w-0">
               <h1 className="font-display text-2xl font-bold text-neutral-50">{user.name || 'Farmer'}</h1>
-              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-1">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
                 <span className="flex items-center gap-1 text-xs text-neutral-500">
-                  <MapPin className="w-3 h-3" /> Pune, Maharashtra
+                  <MapPin className="w-3 h-3" /> {farm?.location || 'Pune, Maharashtra'}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-neutral-500">
                   <Phone className="w-3 h-3" /> {user.phone || '+91 98765 43210'}
                 </span>
                 <span className="flex items-center gap-1 text-xs text-neutral-500">
-                  <Calendar className="w-3 h-3" /> Farming since 2015
+                  <Calendar className="w-3 h-3" /> Farming since {farm?.establishedYear || '2015'}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 <span className="px-2 py-0.5 bg-brand/10 border border-brand/20 text-brand text-[10px] font-bold rounded-full">
-                  Verified Farmer
+                  {farm?.verified ? 'Verified Farmer' : 'Farmer'}
                 </span>
                 <span className="px-2 py-0.5 bg-harvest/10 border border-harvest/20 text-harvest text-[10px] font-bold rounded-full">
-                  4 Seasons Active
+                  {cropHistory.length} Seasons Active
                 </span>
               </div>
             </div>
@@ -154,10 +302,10 @@ export default function FarmProfile() {
           {/* Stat summary */}
           <div className="grid grid-cols-4 gap-3 mt-5 pt-5 border-t border-white/[0.06]">
             {[
-              { label: 'Total Area',    value: '4.2 ha',  icon: MapPin,     color: 'text-brand' },
-              { label: 'Active Crops',  value: '1',       icon: Sprout,     color: 'text-brand' },
-              { label: 'Avg pH',        value: '6.8',     icon: FlaskConical, color: 'text-harvest' },
-              { label: 'Health Score',  value: '84%',     icon: TrendingUp, color: 'text-sky' },
+              { label: 'Total Area',    value: `${farm?.landSize || '4.2'} ha`,  icon: MapPin,     color: 'text-brand' },
+              { label: 'Active Crops',  value: cropHistory.filter(c => c.status === 'active').length.toString(),       icon: Sprout,     color: 'text-brand' },
+              { label: 'Avg pH',        value: dashboardData?.soil?.pH?.toFixed(1) || '6.8',     icon: FlaskConical, color: 'text-harvest' },
+              { label: 'Health Score',  value: `${Math.round(healthScore)}%`,     icon: TrendingUp, color: 'text-sky' },
             ].map(({ label, value, icon: Ic, color }) => (
               <div key={label} className="text-center">
                 <Ic className={`w-4 h-4 ${color} mx-auto mb-1`} />
@@ -201,12 +349,12 @@ export default function FarmProfile() {
               <div className="glass rounded-3xl p-5">
                 <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-4">Farm Details</p>
                 <div className="grid md:grid-cols-2 gap-3">
-                  <EditableField label="Farm Name"    value="Shivaji Farms"            icon={Sprout}   />
-                  <EditableField label="Location"     value="Pune, Maharashtra"         icon={MapPin}   />
-                  <EditableField label="Total Area"   value="4.2 hectares"              icon={Sun}      />
-                  <EditableField label="Soil Type"    value="Sandy Loam / Loamy"        icon={FlaskConical} />
-                  <EditableField label="Water Source" value="Borewell + Canal"          icon={Droplets} />
-                  <EditableField label="Primary Crop" value="Wheat, Soybean"            icon={Wheat}    />
+                  <EditableField label="Farm Name"    value={farm?.name || "My Farm"}            icon={Sprout}   />
+                  <EditableField label="Location"     value={farm?.location || "Pune, Maharashtra"}         icon={MapPin}   />
+                  <EditableField label="Total Area"   value={`${farm?.landSize || '4.2'} hectares`}              icon={Sun}      />
+                  <EditableField label="Soil Type"    value={farm?.soilType || "Sandy Loam / Loamy"}        icon={FlaskConical} />
+                  <EditableField label="Water Source" value={farm?.irrigationType || "Borewell + Canal"}          icon={Droplets} />
+                  <EditableField label="Primary Crop" value={farm?.currentCrop || "Wheat, Soybean"}            icon={Wheat}    />
                 </div>
               </div>
 
@@ -257,7 +405,7 @@ export default function FarmProfile() {
                 </button>
               </div>
               <div className="space-y-3">
-                {CROP_HISTORY.map(({ crop, season, yield: y, status, icon: Ic, color }, i) => {
+                {cropHistory.map(({ crop, season, yield: y, status, icon: Ic, color }, i) => {
                   const c = colorMap[color];
                   return (
                     <motion.div
@@ -303,7 +451,7 @@ export default function FarmProfile() {
               <div className="glass rounded-3xl p-5">
                 <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-4">Earned Badges</p>
                 <div className="grid md:grid-cols-3 gap-3">
-                  {ACHIEVEMENTS.map(({ icon: Ic, label, desc, color }, i) => {
+                  {achievements.map(({ icon: Ic, label, desc, color }, i) => {
                     const c = colorMap[color];
                     return (
                       <motion.div

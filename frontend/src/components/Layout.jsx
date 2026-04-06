@@ -4,16 +4,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   LayoutDashboard, MessageCircle, Leaf, CloudSun,
   FlaskConical, User, Sprout, Wifi, WifiOff, LogOut,
-  ChevronRight, Bell
+  ChevronRight, Bell, Gauge, GitGraph
 } from 'lucide-react';
 
 const navItems = [
-  { path: '/dashboard',  icon: LayoutDashboard, label: 'Home',    color: 'brand' },
-  { path: '/chat',       icon: MessageCircle,   label: 'AI Chat', color: 'lavender' },
-  { path: '/crops',      icon: Leaf,            label: 'Crops',   color: 'brand' },
-  { path: '/weather',    icon: CloudSun,        label: 'Weather', color: 'sky' },
-  { path: '/soil',       icon: FlaskConical,    label: 'Soil',    color: 'harvest' },
-  { path: '/profile',    icon: User,            label: 'Profile', color: 'brand' },
+  { path: '/dashboard',       icon: LayoutDashboard, label: 'Home',           color: 'brand' },
+  { path: '/farm-pulse',      icon: Gauge,           label: 'FarmPulse',      color: 'brand' },
+  { path: '/crop-rotation',   icon: GitGraph,        label: 'Crop Rotation',  color: 'harvest' },
+  { path: '/chat',            icon: MessageCircle,   label: 'AI Chat',        color: 'lavender' },
+  { path: '/crops',           icon: Leaf,            label: 'Crops',          color: 'brand' },
+  { path: '/scanner',         icon: Sprout,          label: 'Scanner',        color: 'harvest' },
+  { path: '/weather',         icon: CloudSun,        label: 'Weather',        color: 'sky' },
+  { path: '/soil',            icon: FlaskConical,    label: 'Soil',           color: 'harvest' },
+  { path: '/profile',         icon: User,            label: 'Profile',        color: 'brand' },
 ];
 
 const colorMap = {
@@ -40,7 +43,7 @@ export default function Layout({ children }) {
 
   const handleLogout = () => {
     localStorage.clear();
-    navigate('/login');
+    window.location.href = '/login';
   };
 
   const currentPage = navItems.find(n => n.path === location.pathname);

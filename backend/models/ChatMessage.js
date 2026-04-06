@@ -1,3 +1,7 @@
+if (process.env.LOCAL_DB === 'true') {
+  const { createLocalModel } = require('../config/localDb');
+  module.exports = createLocalModel('chatMessages', { timestamps: true });
+} else {
 const mongoose = require('mongoose');
 
 /**
@@ -52,3 +56,4 @@ const chatMessageSchema = new mongoose.Schema({
 chatMessageSchema.index({ sessionId: 1, createdAt: 1 });
 
 module.exports = mongoose.model('ChatMessage', chatMessageSchema);
+}

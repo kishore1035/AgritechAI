@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   Cloud, CloudRain, Sun, CloudSnow, Wind, Droplets,
   Thermometer, Eye, AlertTriangle, Bell, CheckCircle2,
   CloudLightning, Sunrise, Sunset, ArrowUp, ArrowDown,
-  Gauge, Navigation
+  Gauge, Navigation, Zap, Compass
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -12,58 +12,63 @@ import {
 } from 'recharts';
 import Layout from '../components/Layout';
 
-/* ── Mock data ─────────────────────────────────── */
-const HOURLY = [
-  { time: '6am',  temp: 22, humidity: 78, rain: 0 },
-  { time: '8am',  temp: 24, humidity: 72, rain: 0 },
-  { time: '10am', temp: 27, humidity: 65, rain: 0 },
-  { time: '12pm', temp: 30, humidity: 58, rain: 10 },
-  { time: '2pm',  temp: 31, humidity: 60, rain: 25 },
-  { time: '4pm',  temp: 28, humidity: 68, rain: 15 },
-  { time: '6pm',  temp: 26, humidity: 74, rain: 5 },
-  { time: '8pm',  temp: 24, humidity: 80, rain: 0 },
-  { time: '10pm', temp: 22, humidity: 82, rain: 0 },
-];
+/* ── API Integration ─────────────────────────────────── */
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const FORECAST = [
-  { day: 'Today',   icon: CloudRain,    high: 31, low: 22, desc: 'Afternoon showers', rain: 60, color: 'sky' },
-  { day: 'Tue',     icon: Cloud,        high: 29, low: 21, desc: 'Partly cloudy',     rain: 20, color: 'neutral' },
-  { day: 'Wed',     icon: Sun,          high: 33, low: 24, desc: 'Sunny',             rain: 5,  color: 'harvest' },
-  { day: 'Thu',     icon: Sun,          high: 34, low: 25, desc: 'Clear skies',       rain: 0,  color: 'harvest' },
-  { day: 'Fri',     icon: CloudLightning, high: 28, low: 20, desc: 'Thunderstorm risk', rain: 75, color: 'alert' },
-  { day: 'Sat',     icon: CloudRain,    high: 26, low: 19, desc: 'Heavy rain',        rain: 85, color: 'sky' },
-  { day: 'Sun',     icon: Cloud,        high: 27, low: 20, desc: 'Overcast',          rain: 30, color: 'neutral' },
-];
+/* ── Weather Icon Helper ─────────────────────────────── */
+const getWeatherIcon = (condition) => {
+  const conditionLower = condition?.toLowerCase() || '';
+  
+  if (conditionLower.includes('clear') || conditionLower.includes('sunny')) {
+    return Sun;
+  } else if (conditionLower.includes('cloud') && !conditionLower.includes('rain')) {
+    return Cloud;
+  } else if (conditionLower.includes('rain') || conditionLower.includes('shower')) {
+    return CloudRain;
+  } else if (conditionLower.includes('thunder') || conditionLower.includes('storm')) {
+    return CloudLightning;
+  } else if (conditionLower.includes('snow')) {
+    return CloudSnow;
+  } else if (conditionLower.includes('wind')) {
+    return Wind;
+  } else {
+    return Cloud; // Default fallback
+  }
+};
 
-const ALERTS = [
-  {
-    level: 'warning',
-    icon: CloudLightning,
-    title: 'Thunderstorm Advisory — Friday',
-    body: 'High wind gusts (50–70 km/h) expected. Secure loose equipment and avoid field operations.',
-    action: 'Delay pesticide application by 2 days',
-    time: 'Issued 1h ago',
-    color: 'alert',
-  },
-  {
-    level: 'watch',
-    icon: Droplets,
-    title: 'Heavy Rainfall Watch — Saturday',
-    body: '85mm of rainfall expected. Risk of surface runoff in Field B (low gradient terrain).',
-    action: 'Check drainage channels before Friday',
-    time: 'Issued 1h ago',
-    color: 'sky',
-  },
-  {
-    level: 'info',
-    icon: Sun,
-    title: 'Optimal Spray Window — Wednesday',
-    body: 'Low wind speed (< 8 km/h) and clear skies forecast. Best time for foliar application.',
-    action: 'Schedule pesticide spray for 7–10am',
-    time: 'AI recommendation',
-    color: 'brand',
-  },
-];
+/* ── Weather Color Helper ─────────────────────────────── */
+const getWeatherColor = (condition, rainChance) => {
+  const conditionLower = condition?.toLowerCase() || '';
+  
+  if (conditionLower.includes('clear') || conditionLower.includes('sunny')) {
+    return 'harvest';
+  } else if (conditionLower.includes('rain') || conditionLower.includes('storm') || rainChance > 60) {
+    return 'sky';
+  } else if (conditionLower.includes('thunder')) {
+    return 'alert';
+  } else {
+    return 'neutral';
+  }
+};
+
+/* ── Alert Icon Helper ─────────────────────────────────── */
+const getAlertIcon = (type) => {
+  const typeLower = type?.toLowerCase() || '';
+  
+  if (typeLower.includes('thunder') || typeLower.includes('storm')) {
+    return CloudLightning;
+  } else if (typeLower.includes('rain') || typeLower.includes('flood')) {
+    return Droplets;
+  } else if (typeLower.includes('wind')) {
+    return Wind;
+  } else if (typeLower.includes('temp') || typeLower.includes('heat')) {
+    return Thermometer;
+  } else if (typeLower.includes('sun') || typeLower.includes('clear')) {
+    return Sun;
+  } else {
+    return AlertTriangle; // Default fallback
+  }
+};
 
 const colorMap = {
   alert:   { bg: 'bg-alert/8 border-alert/20', icon: 'text-alert', title: 'text-alert', badge: 'bg-alert/15 text-alert' },
@@ -89,6 +94,121 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function WeatherAlerts() {
   const [activeMetric, setActiveMetric] = useState('temp');
+  const [weatherData, setWeatherData] = useState(null);
+  const [hourlyData, setHourlyData] = useState([]);
+  const [forecastData, setForecastData] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [location, setLocation] = useState({ lat: 18.52, lng: 73.85 }); // Default: Pune
+  const [selectedForecast, setSelectedForecast] = useState(null);
+
+  // Fetch weather data
+  useEffect(() => {
+    fetchWeatherData();
+    // Set up periodic refresh every 30 minutes
+    const interval = setInterval(fetchWeatherData, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [location]);
+
+  const fetchWeatherData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch comprehensive weather data
+      const response = await fetch(
+        `${API_BASE_URL}/weather/comprehensive?lat=${location.lat}&lng=${location.lng}&days=7`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+      
+      if (!response.ok) throw new Error('Failed to fetch weather data');
+      
+      const data = await response.json();
+      
+      setWeatherData(data);
+      setHourlyData(data.hourly || []);
+      const dailyData = data.daily || [];
+      setForecastData(dailyData);
+      setAlerts(data.alerts || []);
+      
+      // Set the first forecast item as selected by default
+      if (dailyData.length > 0 && !selectedForecast) {
+        setSelectedForecast(dailyData[0]);
+      }
+      
+      setError(null);
+      
+    } catch (err) {
+      console.error('Weather fetch error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Get user's location on component mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.log('Geolocation error:', error);
+          // Keep default location
+        }
+      );
+    }
+  }, []);
+
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <AlertTriangle className="w-12 h-12 text-alert mx-auto mb-4" />
+            <p className="text-neutral-400">Failed to load weather data</p>
+            <button 
+              onClick={fetchWeatherData}
+              className="mt-4 px-4 py-2 bg-brand text-neutral-50 rounded-lg hover:bg-brand/80"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  // Handle Escape key to close modal
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && selectedForecast) {
+        setSelectedForecast(null);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedForecast]);
 
   const metricConfig = {
     temp:     { color: '#fb7185', label: 'Temperature (°C)', gradient: ['#fb7185', '#fb718520'] },
@@ -203,7 +323,7 @@ export default function WeatherAlerts() {
           </div>
           <div className="h-44">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={HOURLY} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+              <AreaChart data={hourlyData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                 <defs>
                   <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={mc.color} stopOpacity={0.3} />
@@ -234,31 +354,41 @@ export default function WeatherAlerts() {
           className="glass rounded-3xl p-5 mb-5"
         >
           <p className="text-sm font-bold text-neutral-200 mb-4">7-Day Forecast</p>
-          <div className="grid grid-cols-7 gap-2">
-            {FORECAST.map(({ day, icon: Ic, high, low, desc, rain, color }, i) => {
-              const c = colorMap[color] || colorMap.neutral;
-              return (
-                <motion.div
-                  key={day}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 + i * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl border transition-colors ${i === 0 ? `${c.bg} border-opacity-100` : 'border-transparent hover:border-white/[0.08]'}`}
-                >
-                  <p className={`text-[10px] font-bold ${i === 0 ? c.icon : 'text-neutral-500'}`}>{day}</p>
-                  <Ic className={`w-5 h-5 ${c.icon}`} />
-                  <p className="text-xs font-bold text-neutral-100">{high}°</p>
-                  <p className="text-[10px] text-neutral-600">{low}°</p>
-                  {rain > 0 && (
-                    <div className="flex items-center gap-0.5">
-                      <Droplets className="w-2.5 h-2.5 text-sky" />
-                      <span className="text-[9px] text-sky font-medium">{rain}%</span>
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
-          </div>
+          {forecastData.length > 0 ? (
+            <div className="grid grid-cols-7 gap-2">
+              {forecastData.map((forecast, i) => {
+                const WeatherIcon = getWeatherIcon(forecast.condition);
+                const forecastColor = forecast.color || getWeatherColor(forecast.condition, forecast.rainChance);
+                const c = colorMap[forecastColor] || colorMap.neutral;
+                return (
+                  <motion.button
+                    key={forecast.dayLabel || i}
+                    onClick={() => setSelectedForecast(forecast)}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 + i * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                    className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl border transition-all duration-300 hover:scale-105 cursor-pointer ${i === 0 ? `${c.bg} border-opacity-100` : 'border-transparent hover:border-white/[0.08]'} ${selectedForecast?.dayLabel === forecast.dayLabel ? `${c.bg} border-opacity-100 ring-2 ring-offset-2 ring-offset-black ring-white/20` : ''}`}
+                  >
+                    <p className={`text-[10px] font-bold ${i === 0 || selectedForecast?.dayLabel === forecast.dayLabel ? c.icon : 'text-neutral-500'}`}>{forecast.dayLabel}</p>
+                    <WeatherIcon className={`w-5 h-5 ${c.icon}`} />
+                    <p className="text-xs font-bold text-neutral-100">{forecast.tempHigh}°</p>
+                    <p className="text-[10px] text-neutral-600">{forecast.tempLow}°</p>
+                    {forecast.rainChance > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        <Droplets className="w-2.5 h-2.5 text-sky" />
+                        <span className="text-[9px] text-sky font-medium">{forecast.rainChance}%</span>
+                      </div>
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Cloud className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
+              <p className="text-neutral-500 text-sm">No forecast data available</p>
+            </div>
+          )}
         </motion.div>
 
         {/* Farm alerts */}
@@ -271,43 +401,234 @@ export default function WeatherAlerts() {
             <Bell className="w-4 h-4 text-neutral-400" />
             <p className="text-sm font-bold text-neutral-200">Farm Alerts & Recommendations</p>
             <span className="ml-auto text-[10px] font-bold text-alert bg-alert/15 border border-alert/20 px-2 py-0.5 rounded-full">
-              {ALERTS.length} active
+              {alerts.length} active
             </span>
           </div>
           <div className="space-y-3">
-            {ALERTS.map(({ level, icon: Ic, title, body, action, time, color }, i) => {
-              const c = colorMap[color];
-              return (
-                <motion.div
-                  key={title}
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.45 + i * 0.09, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                  className={`rounded-2xl border p-4 ${c.bg}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${c.badge}`}>
-                      <Ic className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className={`text-sm font-bold ${c.title}`}>{title}</p>
-                        <span className="text-[10px] text-neutral-600">{time}</span>
+            {alerts.length > 0 ? (
+              alerts.map((alert, i) => {
+                const AlertIcon = alert.icon ? alert.icon : getAlertIcon(alert.type);
+                const c = colorMap[alert.color] || colorMap.neutral;
+                return (
+                  <motion.div
+                    key={alert.title || i}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.45 + i * 0.09, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                    className={`rounded-2xl border p-4 ${c.bg}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${c.badge}`}>
+                        <AlertIcon className="w-4 h-4" />
                       </div>
-                      <p className="text-xs text-neutral-400 leading-relaxed mb-2">{body}</p>
-                      <div className="flex items-center gap-1.5 bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.07] w-fit">
-                        <CheckCircle2 className={`w-3 h-3 ${c.icon} flex-shrink-0`} />
-                        <span className="text-[11px] font-semibold text-neutral-300">{action}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className={`text-sm font-bold ${c.title}`}>{alert.title}</p>
+                          <span className="text-[10px] text-neutral-600">{alert.time || 'Recent'}</span>
+                        </div>
+                        <p className="text-xs text-neutral-400 leading-relaxed mb-2">{alert.message}</p>
+                        {alert.action && (
+                          <div className="flex items-center gap-1.5 bg-white/[0.04] rounded-xl px-3 py-2 border border-white/[0.07] w-fit">
+                            <CheckCircle2 className={`w-3 h-3 ${c.icon} flex-shrink-0`} />
+                            <span className="text-[11px] font-semibold text-neutral-300">{alert.action}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })
+            ) : (
+              <div className="text-center py-8 rounded-2xl border border-white/[0.08] bg-white/[0.02]">
+                <Bell className="w-8 h-8 text-neutral-600 mx-auto mb-2" />
+                <p className="text-neutral-500 text-sm">No active alerts</p>
+                <p className="text-neutral-600 text-xs mt-1">All clear for farm operations</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Forecast Detail Modal */}
+        {selectedForecast && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedForecast(null)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass rounded-3xl p-8 w-full max-w-md"
+            >
+              {/* Close Button */}
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSelectedForecast(null)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors border border-white/[0.06]"
+              >
+                <span className="text-neutral-400 font-bold text-lg">✕</span>
+              </motion.button>
+
+              {/* Day Header */}
+              <div className="mb-8">
+                <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3">Weather Forecast</p>
+                <div className="flex items-center gap-4">
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${colorMap[selectedForecast.color || getWeatherColor(selectedForecast.condition, selectedForecast.rainChance)].bg} border ${colorMap[selectedForecast.color || getWeatherColor(selectedForecast.condition, selectedForecast.rainChance)].bg.split('border-')[1]?.split(' ')[0] ? `border-${colorMap[selectedForecast.color || getWeatherColor(selectedForecast.condition, selectedForecast.rainChance)].bg.split('border-')[1].split(' ')[0]}` : 'border-white/[0.1]'}`}>
+                    {(() => {
+                      const WeatherIcon = getWeatherIcon(selectedForecast.condition);
+                      return <WeatherIcon className={`w-8 h-8 ${colorMap[selectedForecast.color || getWeatherColor(selectedForecast.condition, selectedForecast.rainChance)].icon}`} />;
+                    })()}
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold text-neutral-100">{selectedForecast.dayLabel}</h2>
+                    <p className="text-sm text-neutral-400 mt-1">{selectedForecast.description || selectedForecast.condition}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Temperature Section */}
+              <div className="space-y-4 mb-8">
+                <div className="glass-alt rounded-2xl p-4 border border-white/[0.06]">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Thermometer className="w-4 h-4 text-harvest" />
+                      <span className="text-xs font-semibold text-neutral-300">Temperature</span>
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-4">
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-1">High</p>
+                      <p className="text-3xl font-bold text-harvest">{selectedForecast.tempHigh}°C</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-1">Low</p>
+                      <p className="text-3xl font-bold text-sky">{selectedForecast.tempLow}°C</p>
+                    </div>
+                    <div className="flex-1 text-right">
+                      <p className="text-xs text-neutral-500 mb-1">Humidity</p>
+                      <p className="text-2xl font-bold text-sky">{selectedForecast.humidity || 65}%</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Wind & UV Section */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="glass-alt rounded-2xl p-4 border border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Navigation className="w-4 h-4 text-brand" style={{ transform: `rotate(${['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'].indexOf(selectedForecast.windDir || 'N') * 45}deg)` }} />
+                      <span className="text-xs font-semibold text-neutral-300">Wind</span>
+                    </div>
+                    <p className="text-2xl font-bold text-neutral-100">{selectedForecast.wind || 12} km/h</p>
+                    <p className="text-xs text-neutral-500 mt-1">{selectedForecast.windDir || 'N'}</p>
+                  </div>
+                  
+                  <div className="glass-alt rounded-2xl p-4 border border-white/[0.06]">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap className="w-4 h-4 text-yellow-400" />
+                      <span className="text-xs font-semibold text-neutral-300">UV Index</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-2xl font-bold text-neutral-100">{selectedForecast.uv || 5}</p>
+                      <div className="flex-1">
+                        <div className="text-[10px] text-neutral-500">
+                          {(selectedForecast.uv || 5) <= 2 ? 'Low' : (selectedForecast.uv || 5) <= 5 ? 'Moderate' : (selectedForecast.uv || 5) <= 7 ? 'High' : (selectedForecast.uv || 5) <= 10 ? 'Very High' : 'Extreme'}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </motion.div>
+                </div>
+
+                {/* Precipitation */}
+                <div className="glass-alt rounded-2xl p-4 border border-white/[0.06]">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Droplets className="w-4 h-4 text-sky" />
+                    <span className="text-xs font-semibold text-neutral-300">Precipitation Chance</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-2 bg-white/[0.08] rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${selectedForecast.rainChance || 0}%` }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                        className="h-full bg-gradient-to-r from-sky to-sky/60"
+                      />
+                    </div>
+                    <p className="text-lg font-bold text-sky tabular-nums">{selectedForecast.rainChance || 0}%</p>
+                  </div>
+                </div>
+
+                {/* Farm Advisory */}
+                <div className="glass-alt rounded-2xl p-4 border border-white/[0.06] bg-brand/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="w-4 h-4 text-brand" />
+                    <span className="text-xs font-semibold text-brand">Smart Recommendation</span>
+                  </div>
+                  <p className="text-sm text-neutral-300 leading-relaxed mb-3">
+                    {(selectedForecast.rainChance || 0) > 70 
+                      ? '🚫 High rain risk. Postpone pesticide spray applications. Focus on field drainage inspection and equipment maintenance.'
+                      : (selectedForecast.rainChance || 0) > 40 
+                      ? '⚠️ Moderate rain expected. Delay spray applications by 1-2 days. Monitor weather forecast closely.'
+                      : (selectedForecast.rainChance || 0) > 20 
+                      ? '✅ Good conditions. Suitable for most outdoor farm operations. Light spray possible in early morning.'
+                      : '🌟 Excellent conditions! Ideal day for pesticide spraying, irrigation, and outdoor farm work.'}
+                  </p>
+                  {(selectedForecast.wind || 0) > 20 && (
+                    <div className="text-xs bg-alert/20 border border-alert/40 rounded-lg p-2 text-alert mt-2">
+                      ⚠️ High wind: {selectedForecast.wind || 0} km/h - Not ideal for spraying
+                    </div>
+                  )}
+                  {(selectedForecast.humidity || 0) > 85 && (
+                    <div className="text-xs bg-sky/20 border border-sky/40 rounded-lg p-2 text-sky mt-2">
+                      💧 High humidity - Disease risk increases. Apply fungicide if planned.
+                    </div>
+                  )}
+                  {(selectedForecast.uv || 0) > 7 && (
+                    <div className="text-xs bg-yellow-400/20 border border-yellow-400/40 rounded-lg p-2 text-yellow-300 mt-2">
+                      ☀️ High UV index - Use sun protection, schedule outdoor work early/late
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setSelectedForecast(null)}
+                  className="flex-1 px-4 py-3 rounded-xl border border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 font-semibold transition-colors text-sm"
+                >
+                  Close
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    alert(`✅ Scheduled: Farm activity for ${selectedForecast.dayLabel}\n\n📅 Recommendation: ${
+                      (selectedForecast.rainChance || 0) > 70 ? 'Equipment maintenance' :
+                      (selectedForecast.rainChance || 0) > 40 ? 'Monitor conditions' :
+                      (selectedForecast.rainChance || 0) > 20 ? 'Light operations' :
+                      'Pesticide spray + irrigation'
+                    }\n\n🌤️ Conditions: ${selectedForecast.description || selectedForecast.condition}`);
+                    setSelectedForecast(null);
+                  }}
+                  className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-brand to-brand/80 text-black font-semibold hover:shadow-lg hover:shadow-brand/40 transition-all text-sm"
+                >
+                  Schedule Activity
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
 
       </div>
     </Layout>
   );
+
 }

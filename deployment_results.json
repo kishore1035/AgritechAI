@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-04-07T01:05:04.145012",
+  "duration_seconds": 14.595475,
+  "phases": {
+    "1": {
+      "name": "SimpleSoilProfile",
+      "status": "deployed",
+      "steps": 5,
+      "steps_completed": 5,
+      "duration": 2.515302
+    },
+    "2": {
+      "name": "Soil Science",
+      "status": "deployed",
+      "steps": 6,
+      "steps_completed": 6,
+      "duration": 3.008403
+    },
+    "3": {
+      "name": "SimSoil - Water Balance",
+      "status": "deployed",
+      "steps": 6,
+      "steps_completed": 6,
+      "duration": 3.008645
+    },
+    "4": {
+      "name": "PyFAO56 - Irrigation",
+      "status": "deployed",
+      "steps": 6,
+      "steps_completed": 6,
+      "duration": 3.006129
+    },
+    "5": {
+      "name": "Crop Recommendation",
+      "status": "deployed",
+      "steps": 6,
+      "steps_completed": 6,
+      "duration": 3.007751
+    }
+  },
+  "status": "success"
+}
