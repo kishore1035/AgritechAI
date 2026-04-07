@@ -1,104 +1,89 @@
-import { useState, Component } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
-import { AuthProvider } from './context/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
+import './styles/globals.css';
+import { ThemeProvider } from './context/ThemeContext';
+import Dashboard from './pages/Dashboard';
+import SoilAnalysis from './pages/SoilAnalysis';
+import WaterManagement from './pages/WaterManagement';
+import MarketIntelligence from './pages/MarketIntelligence';
+import PlantScanner from './pages/PlantScanner';
+import Alerts from './pages/Alerts';
+import Profile from './pages/Profile';
+import Navigation from './components/Navigation';
+import { AlertContainer } from './components';
 
-class ErrorBoundary extends Component {
-  constructor(props) { super(props); this.state = { error: null }; }
-  static getDerivedStateFromError(error) { return { error }; }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{ padding: 32, fontFamily: 'monospace', color: '#fb7185', background: '#050905', minHeight: '100vh' }}>
-          <h2 style={{ color: '#22c55e' }}>App Error</h2>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error?.toString()}</pre>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#6e906f' }}>{this.state.error?.stack}</pre>
-        </div>
-      );
+function App() {
+  const { i18n } = useTranslation();
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [alerts, setAlerts] = useState([]);
+
+  // Initialize i18n
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem('agritech-language') || 'en';
+    i18n.changeLanguage(savedLanguage);
+  }, [i18n]);
+
+  const showAlert = (type, title, message, autoClose = 5000) => {
+    const id = Date.now();
+    setAlerts((prev) => [...prev, { id, type, title, message, autoClose }]);
+  };
+
+  const dismissAlert = (id) => {
+    setAlerts((prev) => prev.filter((alert) => alert.id !== id));
+  };
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'dashboard':
+        return <Dashboard onAlert={showAlert} />;
+      case 'analysis':
+        return <SoilAnalysis onAlert={showAlert} />;
+      case 'water':
+        return <WaterManagement onAlert={showAlert} />;
+      case 'market':
+        return <MarketIntelligence onAlert={showAlert} />;
+      case 'scanner':
+        return <PlantScanner onAlert={showAlert} />;
+      case 'alerts':
+        return <Alerts onAlert={showAlert} />;
+      case 'profile':
+        return <Profile onAlert={showAlert} />;
+      default:
+        return <Dashboard onAlert={showAlert} />;
     }
-    return this.props.children;
-  }
-}
-
-import './i18n';
-import Login                from './pages/Login';
-import Register             from './pages/Register';
-import Dashboard            from './pages/Dashboard';
-import FarmsList            from './pages/FarmsList';
-import AddFarm              from './pages/AddFarm';
-import SoilAnalysis         from './pages/SoilAnalysis';
-import AIChat               from './pages/AIChat';
-import CropRecommendation   from './pages/CropRecommendation';
-import WeatherAlerts        from './pages/WeatherAlerts';
-import SoilHealth           from './pages/SoilHealth';
-import FarmProfile          from './pages/FarmProfile';
-import PlantScanner         from './pages/PlantScanner';
-import MarketAnalyzer       from './components/MarketAnalyzer';
-import FarmPulse            from './pages/FarmPulse';
-import CropRotationPlanner  from './pages/CropRotationPlanner';
-
-const transition = { duration: 0.28, ease: [0.16, 1, 0.3, 1] };
-
-function AnimatedRoutes({ isAuthenticated, setIsAuthenticated }) {
-  const location = useLocation();
-
-  const authProps = { setAuth: setIsAuthenticated };
+  };
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={transition}
-        style={{ minHeight: '100dvh' }}
-      >
-        <Routes location={location}>
-          {/* ── Default route ──────────────────── */}
-          <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} />} />
+    <ThemeProvider>
+      <div className="min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 md:flex">
+        <Navigation currentPage={currentPage} onPageChange={setCurrentPage} />
 
-          {/* ── Public routes ──────────────────── */}
-          <Route path="/login"    element={!isAuthenticated ? <Login    {...authProps} /> : <Navigate to="/dashboard" />} />
-          <Route path="/register" element={!isAuthenticated ? <Register {...authProps} /> : <Navigate to="/dashboard" />} />
+        {/* Main Content */}
+        <main className="min-h-screen w-full overflow-y-auto pb-16 md:pb-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{
+                type: 'spring',
+                stiffness: 300,
+                damping: 30,
+                mass: 0.5,
+              }}
+            >
+              {renderPage()}
+            </motion.div>
+          </AnimatePresence>
+        </main>
 
-          {/* ── Authenticated routes ───────────── */}
-          <Route path="/dashboard"           element={isAuthenticated ? <Dashboard />             : <Navigate to="/login" />} />
-          <Route path="/farm-pulse"          element={isAuthenticated ? <FarmPulse />             : <Navigate to="/login" />} />
-          <Route path="/crop-rotation"       element={isAuthenticated ? <CropRotationPlanner />  : <Navigate to="/login" />} />
-          <Route path="/chat"                element={isAuthenticated ? <AIChat />                : <Navigate to="/login" />} />
-          <Route path="/crops"               element={isAuthenticated ? <CropRecommendation />  : <Navigate to="/login" />} />
-          <Route path="/scanner"             element={isAuthenticated ? <PlantScanner />        : <Navigate to="/login" />} />
-          <Route path="/market"              element={isAuthenticated ? <MarketAnalyzer />      : <Navigate to="/login" />} />
-          <Route path="/weather"             element={isAuthenticated ? <WeatherAlerts />       : <Navigate to="/login" />} />
-          <Route path="/soil"                element={isAuthenticated ? <SoilHealth />          : <Navigate to="/login" />} />
-          <Route path="/profile"             element={isAuthenticated ? <FarmProfile />         : <Navigate to="/login" />} />
-
-          {/* ── Legacy routes (keep existing backend integration) */}
-          <Route path="/farms"            element={isAuthenticated ? <FarmsList />          : <Navigate to="/login" />} />
-          <Route path="/farms/add"        element={isAuthenticated ? <AddFarm />            : <Navigate to="/login" />} />
-          <Route path="/analysis/:farmId" element={isAuthenticated ? <SoilAnalysis />       : <Navigate to="/login" />} />
-
-          {/* ── Fallback ───────────────────────── */}
-          <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} />} />
-        </Routes>
-      </motion.div>
-    </AnimatePresence>
+        {/* Alert Container */}
+        <AlertContainer alerts={alerts} onDismiss={dismissAlert} />
+      </div>
+    </ThemeProvider>
   );
 }
 
-export default function App() {
-  // Only authenticated if token exists AND is not expired
-  const token = localStorage.getItem('token');
-  const [isAuthenticated, setIsAuthenticated] = useState(!!token);
-  
-  return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <Router>
-          <AnimatedRoutes isAuthenticated={isAuthenticated} setIsAuthenticated={setIsAuthenticated} />
-        </Router>
-      </AuthProvider>
-    </ErrorBoundary>
-  );
-}
+export default App;

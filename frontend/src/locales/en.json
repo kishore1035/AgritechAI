@@ -1,0 +1,76 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "analysis": "Soil Analysis",
+    "scanner": "Plant Scanner",
+    "water": "Water Management",
+    "market": "Market Intelligence",
+    "alerts": "Alerts",
+    "profile": "Profile"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome to Your Farm",
+    "weather": "Weather",
+    "soil_health": "Soil Health",
+    "water_balance": "Water Balance",
+    "crop_status": "Crop Status",
+    "market_prices": "Market Prices",
+    "recent_alerts": "Recent Alerts"
+  },
+  "analysis": {
+    "title": "Soil Analysis",
+    "soil_profile": "Soil Profile",
+    "nutrients": "Nutrients",
+    "nitrogen": "Nitrogen",
+    "phosphorus": "Phosphorus",
+    "potassium": "Potassium",
+    "ph_level": "pH Level",
+    "moisture": "Moisture",
+    "recommendations": "Recommendations"
+  },
+  "water": {
+    "title": "Water Management",
+    "water_balance": "Water Balance",
+    "rainfall": "Rainfall",
+    "irrigation": "Irrigation",
+    "runoff": "Runoff",
+    "schedule": "Irrigation Schedule",
+    "next_irrigation": "Next Irrigation"
+  },
+  "market": {
+    "title": "Market Intelligence",
+    "prices": "Market Prices",
+    "trends": "Price Trends",
+    "news": "Agricultural News",
+    "sentiment": "Market Sentiment"
+  },
+  "alerts": {
+    "title": "Alerts",
+    "no_alerts": "No alerts at the moment",
+    "critical": "Critical",
+    "warning": "Warning",
+    "info": "Information"
+  },
+  "profile": {
+    "title": "Profile",
+    "farm_details": "Farm Details",
+    "location": "Location",
+    "farm_size": "Farm Size",
+    "crops": "Crops",
+    "settings": "Settings"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "warning": "Warning",
+    "back": "Back",
+    "next": "Next",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close"
+  }
+}

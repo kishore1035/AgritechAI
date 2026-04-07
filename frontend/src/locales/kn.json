@@ -1,0 +1,76 @@
+{
+  "nav": {
+    "dashboard": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
+    "analysis": "ಮಣ್ಣಿನ ವಿಶ್ಲೇಷಣೆ",
+    "scanner": "ಸಸ್ಯ ಸ್ಕ್ಯಾನರ್",
+    "water": "ನೀರಿನ ನಿರ್ವಹಣೆ",
+    "market": "ಮಾರುಕಟ್ಟೆ ವಿಶ್ಲೇಷಣೆ",
+    "alerts": "ಎಚ್ಚರಿಕೆಗಳು",
+    "profile": "ಪ್ರೊಫೈಲ್"
+  },
+  "dashboard": {
+    "title": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
+    "welcome": "ನಿಮ್ಮ ತೋಟಕ್ಕೆ ಸ್ವಾಗತ",
+    "weather": "ಹವಾಮಾನ",
+    "soil_health": "ಮಣ್ಣಿನ ಆರೋಗ್ಯ",
+    "water_balance": "ನೀರಿನ ಸಮತೋಲನ",
+    "crop_status": "ಬೆಳೆಯ ಸ್ಥಿತಿ",
+    "market_prices": "ಮಾರುಕಟ್ಟೆ ಬೆಲೆಗಳು",
+    "recent_alerts": "ಇತ್ತೀಚಿನ ಎಚ್ಚರಿಕೆಗಳು"
+  },
+  "analysis": {
+    "title": "ಮಣ್ಣಿನ ವಿಶ್ಲೇಷಣೆ",
+    "soil_profile": "ಮಣ್ಣಿನ ಪ್ರೊಫೈಲ್",
+    "nutrients": "ಪೋಷಕಾಂಶಗಳು",
+    "nitrogen": "ನೈಟ್ರೋಜನ್",
+    "phosphorus": "ಫಾಸ್ಫರಸ್",
+    "potassium": "ಪೊಟಾಶಿಯಮ್",
+    "ph_level": "ಪಿಎಚ್ ಮಾತ್ರೆ",
+    "moisture": "ತೇವತೆ",
+    "recommendations": "ಶಿಫಾರಸುಗಳು"
+  },
+  "water": {
+    "title": "ನೀರಿನ ನಿರ್ವಹಣೆ",
+    "water_balance": "ನೀರಿನ ಸಮತೋಲನ",
+    "rainfall": "ಮಳೆ",
+    "irrigation": "ನೀರಾವರಿ",
+    "runoff": "ಹೊರಪ್ರವಾಹ",
+    "schedule": "ನೀರಾವರಿ ವೇಳಾಪಟ್ಟಿ",
+    "next_irrigation": "ಮುಂದಿನ ನೀರಾವರಿ"
+  },
+  "market": {
+    "title": "ಮಾರುಕಟ್ಟೆ ವಿಶ್ಲೇಷಣೆ",
+    "prices": "ಮಾರುಕಟ್ಟೆ ಬೆಲೆಗಳು",
+    "trends": "ಬೆಲೆ ಪ್ರವೃತ್ತಿಗಳು",
+    "news": "ಕೃಷಿ ಸುದ್ದಿ",
+    "sentiment": "ಮಾರುಕಟ್ಟೆ ಭಾವನೆ"
+  },
+  "alerts": {
+    "title": "ಎಚ್ಚರಿಕೆಗಳು",
+    "no_alerts": "ಸದ್ಯ ಯಾವುದೇ ಎಚ್ಚರಿಕೆ ಇಲ್ಲ",
+    "critical": "ಗಂಭೀರ",
+    "warning": "ಎಚ್ಚರಿಕೆ",
+    "info": "ಮಾಹಿತಿ"
+  },
+  "profile": {
+    "title": "ಪ್ರೊಫೈಲ್",
+    "farm_details": "ತೋಟದ ವಿವರಗಳು",
+    "location": "ಸ್ಥಳ",
+    "farm_size": "ತೋಟದ ಗಾತ್ರ",
+    "crops": "ಬೆಳೆಗಳು",
+    "settings": "ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
+  },
+  "common": {
+    "loading": "ಲೋಡ್ ಆಗುತ್ತಿದೆ...",
+    "error": "ಪ್ರಮಾದ",
+    "success": "ಸಫಲ",
+    "warning": "ಎಚ್ಚರಿಕೆ",
+    "back": "ಹಿಂದೆ",
+    "next": "ಮುಂದೆ",
+    "save": "ಉಳಿಸಿ",
+    "cancel": "ರದ್ದುಗೊಳಿಸಿ",
+    "delete": "ಅಳಿಸಿ",
+    "edit": "ಸಂಪಾದಿಸಿ",
+    "close": "ಮುಚ್ಚಿ"
+  }
+}

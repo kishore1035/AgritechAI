@@ -1,0 +1,76 @@
+{
+  "nav": {
+    "dashboard": "Irukkanam",
+    "analysis": "Nilam Vilaasai",
+    "scanner": "Thaavara Scanner",
+    "water": "Neer Saladhamai",
+    "market": "Padai Vilaasai",
+    "alerts": "Vali Arivu",
+    "profile": "Kurippu"
+  },
+  "dashboard": {
+    "title": "Irukkanam",
+    "welcome": "Ni Nilam Kurippu Vandina",
+    "weather": "Kalam",
+    "soil_health": "Nilam Arokkiyam",
+    "water_balance": "Neer Samappu",
+    "crop_status": "Valinaippu Nilaimai",
+    "market_prices": "Padai Vilaippu",
+    "recent_alerts": "Ina Vali Arivu"
+  },
+  "analysis": {
+    "title": "Nilam Vilaasai",
+    "soil_profile": "Nilam Kurippu",
+    "nutrients": "Puliyin Nanikal",
+    "nitrogen": "Nittirozhanam",
+    "phosphorus": "Phaspath",
+    "potassium": "Potaasiyam",
+    "ph_level": "pH Aalai",
+    "moisture": "Bhoomikam",
+    "recommendations": "Munnodi Puyarippu"
+  },
+  "water": {
+    "title": "Neer Saladhamai",
+    "water_balance": "Neer Samappu",
+    "rainfall": "Mazhai",
+    "irrigation": "Valinaippu Nei",
+    "runoff": "Nirai Valappu",
+    "schedule": "Valinai Neram",
+    "next_irrigation": "Vazhai Valinaippu Nei"
+  },
+  "market": {
+    "title": "Padai Vilaasai",
+    "prices": "Padai Vilaippu",
+    "trends": "Vilaippu Nayam",
+    "news": "Nilam Samacharam",
+    "sentiment": "Padai Arviyal"
+  },
+  "alerts": {
+    "title": "Vali Arivu",
+    "no_alerts": "Ippu Vali Arivu Illa",
+    "critical": "Mukkiyamaina",
+    "warning": "Vali",
+    "info": "Tanipu"
+  },
+  "profile": {
+    "title": "Kurippu",
+    "farm_details": "Nilam Sambandhana Vivarangal",
+    "location": "Idam",
+    "farm_size": "Nilam Vali",
+    "crops": "Valinaippu",
+    "settings": "Seythaippu"
+  },
+  "common": {
+    "loading": "Katikuthirukkirathu...",
+    "error": "Paarmmarpu",
+    "success": "Yendrathu",
+    "warning": "Vali",
+    "back": "Undo",
+    "next": "Vazhrai",
+    "save": "Kaipidum",
+    "cancel": "Vili Seiya",
+    "delete": "Ezhu",
+    "edit": "Maari Seiyal",
+    "close": "Pidu"
+  }
+}

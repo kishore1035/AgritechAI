@@ -20,13 +20,13 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from urllib.parse import urljoin
 
-from flask import Flask, request, render_string_response
+from flask import Flask, request, Response
 from twilio.rest import Client
 from twilio.twiml.voice_response import VoiceResponse
 from pydantic import BaseModel
 
-from ivr_service import IVRService, IVRConfig
-from ivr_integration import IVRIntegrationOrchestrator, FarmerProfile
+from .ivr_service import IVRService, IVRConfig
+from .ivr_integration import IVRIntegrationOrchestrator, FarmerProfile
 
 
 logger = logging.getLogger(__name__)

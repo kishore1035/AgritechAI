@@ -1,0 +1,76 @@
+{
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "analysis": "मिट्टी विश्लेषण",
+    "scanner": "पौधा स्कैनर",
+    "water": "जल प्रबंधन",
+    "market": "बाजार विश्लेषण",
+    "alerts": "सतर्कताएं",
+    "profile": "प्रोफाइल"
+  },
+  "dashboard": {
+    "title": "डैशबोर्ड",
+    "welcome": "अपने खेत में स्वागत है",
+    "weather": "मौसम",
+    "soil_health": "मिट्टी का स्वास्थ्य",
+    "water_balance": "जल संतुलन",
+    "crop_status": "फसल की स्थिति",
+    "market_prices": "बाजार भाव",
+    "recent_alerts": "हाल की सतर्कताएं"
+  },
+  "analysis": {
+    "title": "मिट्टी विश्लेषण",
+    "soil_profile": "मिट्टी प्रोफाइल",
+    "nutrients": "पोषक तत्व",
+    "nitrogen": "नाइट्रोजन",
+    "phosphorus": "फॉस्फोरस",
+    "potassium": "पोटेशियम",
+    "ph_level": "pH स्तर",
+    "moisture": "नमी",
+    "recommendations": "सिफारिशें"
+  },
+  "water": {
+    "title": "जल प्रबंधन",
+    "water_balance": "जल संतुलन",
+    "rainfall": "वर्षा",
+    "irrigation": "सिंचाई",
+    "runoff": "बहाव",
+    "schedule": "सिंचाई अनुसूची",
+    "next_irrigation": "अगली सिंचाई"
+  },
+  "market": {
+    "title": "बाजार विश्लेषण",
+    "prices": "बाजार भाव",
+    "trends": "कीमत रुझान",
+    "news": "कृषि समाचार",
+    "sentiment": "बाजार भावना"
+  },
+  "alerts": {
+    "title": "सतर्कताएं",
+    "no_alerts": "फिलहाल कोई सतर्कता नहीं",
+    "critical": "महत्वपूर्ण",
+    "warning": "चेतावनी",
+    "info": "सूचना"
+  },
+  "profile": {
+    "title": "प्रोफाइल",
+    "farm_details": "खेत के विवरण",
+    "location": "स्थान",
+    "farm_size": "खेत का आकार",
+    "crops": "फसलें",
+    "settings": "सेटिंग्स"
+  },
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "error": "त्रुटि",
+    "success": "सफल",
+    "warning": "चेतावनी",
+    "back": "वापस",
+    "next": "अगला",
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "delete": "हटाएं",
+    "edit": "संपादित करें",
+    "close": "बंद करें"
+  }
+}

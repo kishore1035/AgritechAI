@@ -1,0 +1,76 @@
+{
+  "nav": {
+    "dashboard": "డ్యాష్‌బోర్డ్",
+    "analysis": "మట్టి విశ్లేషణ",
+    "scanner": "మొక్క స్కానర్",
+    "water": "నీటి నిర్వహణ",
+    "market": "మార్కెట్ విశ్లేషణ",
+    "alerts": "హెచ్చరికలు",
+    "profile": "ప్రొఫైల్"
+  },
+  "dashboard": {
+    "title": "డ్యాష్‌బోర్డ్",
+    "welcome": "మీ తోటకు స్వాగతం",
+    "weather": "వాతావరణం",
+    "soil_health": "మట్టి ఆరోగ్యం",
+    "water_balance": "నీటి సమతుల్యత",
+    "crop_status": "పంట స్థితి",
+    "market_prices": "మార్కెట్ ధరలు",
+    "recent_alerts": "ఇటీవల హెచ్చరికలు"
+  },
+  "analysis": {
+    "title": "మట్టి విశ్లేషణ",
+    "soil_profile": "మట్టి ప్రొఫైల్",
+    "nutrients": "పోషకాలు",
+    "nitrogen": "నైట్రోజన్",
+    "phosphorus": "ఫాస్ఫరస్",
+    "potassium": "పొటాషియం",
+    "ph_level": "pH స్థితి",
+    "moisture": "తేమ",
+    "recommendations": "సిఫారిషులు"
+  },
+  "water": {
+    "title": "నీటి నిర్వహణ",
+    "water_balance": "నీటి సమతుల్యత",
+    "rainfall": "వర్షపాతం",
+    "irrigation": "సేద్య నీటి సరఫరా",
+    "runoff": "ప్రవాహం",
+    "schedule": "సేద్య నీటి షెడ్యూల్",
+    "next_irrigation": "తర్వాత సేద్య నీటి సరఫరా"
+  },
+  "market": {
+    "title": "మార్కెట్ విశ్లేషణ",
+    "prices": "మార్కెట్ ధరలు",
+    "trends": "ధర ట్రెండ్‌లు",
+    "news": "వ్యవసాయ వార్తలు",
+    "sentiment": "మార్కెట్ భావన"
+  },
+  "alerts": {
+    "title": "హెచ్చరికలు",
+    "no_alerts": "ఇప్పుడు ఎటువంటి హెచ్చరికలు లేవు",
+    "critical": "క్రిటికల్",
+    "warning": "హెచ్చరిక",
+    "info": "సమాచారం"
+  },
+  "profile": {
+    "title": "ప్రొఫైల్",
+    "farm_details": "తోట వివరాలు",
+    "location": "స్థానం",
+    "farm_size": "తోట పరిమాణం",
+    "crops": "పంటలు",
+    "settings": "సెట్టింగ్‌లు"
+  },
+  "common": {
+    "loading": "లోడ్ అవుతోంది...",
+    "error": "ఎర్రర్",
+    "success": "సఫలమైనది",
+    "warning": "హెచ్చరిక",
+    "back": "వెనుకకు",
+    "next": "తర్వాత",
+    "save": "సేవ్ చేయి",
+    "cancel": "రద్దు చేయి",
+    "delete": "తొలగించు",
+    "edit": "సవరించు",
+    "close": "మూయి"
+  }
+}

@@ -1,861 +1,1083 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { animate } from 'motion';
-import {
-  Thermometer, Droplets, FlaskConical, Sprout, MessageCircle,
-  CloudSun, Leaf, ChevronRight, AlertTriangle, CheckCircle2,
-  Wind, Sun, ArrowUpRight, Zap, CalendarDays, TrendingUp,
-  Wheat, Clock, Camera, Upload, X
+import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { 
+  Leaf, TrendingUp, AlertTriangle, Droplets, 
+  Cloud, Sun, Wind, MessageCircle, X, Minimize2, 
+  Maximize2, Send, ChevronRight, Activity, 
+  ThermometerSun, Eye, Calendar
 } from 'lucide-react';
-import { AnimatePresence } from 'motion/react';
-import Layout from '../components/Layout';
-import { farmsAPI } from '../services/api';
+import { tastePatterns, AGRITECH_COLORS, layoutPatterns } from '../tasteSkillConfig';
+import { cn } from '../utils/cn';
 
-/* ── Icon mapping for alerts ─────────────────────────────────── */
-const iconMapping = {
-  CloudRain: CloudSun,
-  AlertTriangle: AlertTriangle,
-  Droplets: Droplets,
-  CheckCircle2: CheckCircle2,
-  TrendingUp: TrendingUp,
-  Zap: Zap,
-};
+const API_BASE_URL = 'http://localhost:5000/api';
 
-/* ── Real-time WebSocket connection ─────────────────────────────────── */
-class RealTimeUpdates {
-  constructor() {
-    this.socket = null;
-    this.callbacks = new Map();
-    this.reconnectAttempts = 0;
-    this.maxReconnects = 5;
-  }
-
-  connect() {
-    if (this.socket?.readyState === WebSocket.OPEN) return;
-
-    const wsUrl = `ws://localhost:5000/ws?token=${localStorage.getItem('token')}`;
-    this.socket = new WebSocket(wsUrl);
-
-    this.socket.onopen = () => {
-      console.log('🔗 Real-time connection established');
-      this.reconnectAttempts = 0;
-    };
-
-    this.socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.notifyCallbacks(data.type, data.payload);
-    };
-
-    this.socket.onclose = () => {
-      console.log('🔌 Real-time connection closed');
-      this.attemptReconnect();
-    };
-
-    this.socket.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-    };
-  }
-
-  attemptReconnect() {
-    if (this.reconnectAttempts < this.maxReconnects) {
-      this.reconnectAttempts++;
-      setTimeout(() => {
-        console.log(`🔄 Reconnecting... (${this.reconnectAttempts}/${this.maxReconnects})`);
-        this.connect();
-      }, 1000 * this.reconnectAttempts);
-    }
-  }
-
-  subscribe(type, callback) {
-    if (!this.callbacks.has(type)) {
-      this.callbacks.set(type, new Set());
-    }
-    this.callbacks.get(type).add(callback);
-
-    // Return unsubscribe function
-    return () => {
-      this.callbacks.get(type)?.delete(callback);
-    };
-  }
-
-  notifyCallbacks(type, payload) {
-    const callbacks = this.callbacks.get(type);
-    if (callbacks) {
-      callbacks.forEach(callback => callback(payload));
-    }
-  }
-
-  disconnect() {
-    if (this.socket) {
-      this.socket.close();
-      this.socket = null;
-    }
-  }
-}
-
-// Global real-time instance
-const realTimeUpdates = new RealTimeUpdates();
-
-const QUICK_ACTIONS = [
-  { label: 'Scan Plant', icon: Camera,       action: 'scan',   color: 'brand',    bg: 'bg-brand/10 border-brand/20 hover:bg-brand/18',            text: 'text-brand' },
-  { label: 'AI Chat',    icon: MessageCircle, path: '/chat',    color: 'lavender', bg: 'bg-lavender/10 border-lavender/20 hover:bg-lavender/18', text: 'text-lavender' },
-  { label: 'Weather',    icon: CloudSun,      path: '/weather', color: 'sky',      bg: 'bg-sky/10 border-sky/20 hover:bg-sky/18',                 text: 'text-sky' },
-  { label: 'Crops',      icon: Leaf,          path: '/crops',   color: 'brand',    bg: 'bg-brand/10 border-brand/20 hover:bg-brand/18',            text: 'text-brand' },
-  { label: 'Soil',       icon: FlaskConical,  path: '/soil',    color: 'harvest',  bg: 'bg-harvest/10 border-harvest/20 hover:bg-harvest/18',      text: 'text-harvest' },
-];
-
-const colorAlertMap = {
-  harvest: 'border-harvest/20 bg-harvest/8 text-harvest',
-  sky:     'border-sky/20 bg-sky/8 text-sky',
-  brand:   'border-brand/20 bg-brand/8 text-brand',
-};
-
-function AnimatedCounter({ target, duration = 1.6, suffix = '' }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    const ctrl = animate(0, target, {
-      duration,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate(v) { if (ref.current) ref.current.textContent = Math.round(v) + suffix; },
-    });
-    return () => ctrl.stop();
-  }, [target, duration, suffix]);
-  return <span ref={ref}>0{suffix}</span>;
-}
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-function FarmHealthRing({ score = 84 }) {
-  const r = 42, circ = 2 * Math.PI * r;
-  const dash = (score / 100) * circ;
-  const color = score >= 75 ? '#22c55e' : score >= 50 ? '#fbbf24' : '#fb7185';
-  return (
-    <div className="relative w-28 h-28 flex items-center justify-center">
-      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
-        <motion.circle
-          cx="50" cy="50" r={r} fill="none"
-          stroke={color} strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={circ}
-          initial={{ strokeDashoffset: circ }}
-          animate={{ strokeDashoffset: circ - dash }}
-          transition={{ duration: 2, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        />
-      </svg>
-      <div className="flex flex-col items-center z-10">
-        <span className="text-2xl font-bold text-neutral-50 font-display" style={{ color }}>
-          <AnimatedCounter target={score} suffix="%" />
-        </span>
-        <span className="text-[10px] text-neutral-500 font-medium mt-0.5">Health</span>
-      </div>
-    </div>
-  );
-}
-
-export default function Dashboard() {
-  const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const [now, setNow] = useState(new Date());
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const Dashboard = ({ onAlert }) => {
+  const { t } = useTranslation();
   
-  // Guard: ensure user is authenticated
-  React.useEffect(() => {
-    if (!localStorage.getItem('token')) {
-      navigate('/login');
-    }
-  }, [navigate]);
+  // State management
+  const [loading, setLoading] = useState(true);
+  const [soilHealth, setSoilHealth] = useState(null);
+  const [yieldPrediction, setYieldPrediction] = useState(null);
+  const [diseaseRisk, setDiseaseRisk] = useState(null);
+  const [marketData, setMarketData] = useState(null);
+  const [weatherForecast, setWeatherForecast] = useState(null);
+  const [cropRecommendations, setCropRecommendations] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMinimized, setChatMinimized] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  // Fetch dashboard data from API
+  // Fetch all dashboard data on mount
   useEffect(() => {
     fetchDashboardData();
-    
-    // Set up periodic refresh every 5 minutes
-    const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
-    
-    // Connect to real-time updates
-    realTimeUpdates.connect();
-    
-    // Subscribe to real-time dashboard updates
-    const unsubscribeAlerts = realTimeUpdates.subscribe('new_alert', (alert) => {
-      console.log('🔔 New alert received:', alert);
-      setDashboardData(prev => ({
-        ...prev,
-        alerts: {
-          ...prev?.alerts,
-          unreadCount: (prev?.alerts?.unreadCount || 0) + 1,
-          recent: [alert, ...(prev?.alerts?.recent || []).slice(0, 9)]
-        }
-      }));
-    });
-
-    const unsubscribeWeather = realTimeUpdates.subscribe('weather_update', (weather) => {
-      console.log('🌤️ Weather update received:', weather);
-      setDashboardData(prev => ({
-        ...prev,
-        weather: weather
-      }));
-    });
-
-    const unsubscribeSoil = realTimeUpdates.subscribe('soil_update', (soilData) => {
-      console.log('🌱 Soil update received:', soilData);
-      setDashboardData(prev => ({
-        ...prev,
-        soil: soilData.soil,
-        healthScore: soilData.healthScore
-      }));
-    });
-
-    return () => {
-      clearInterval(interval);
-      unsubscribeAlerts();
-      unsubscribeWeather();
-      unsubscribeSoil();
-      realTimeUpdates.disconnect();
-    };
   }, []);
 
   const fetchDashboardData = async () => {
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      const response = await fetch('/api/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (!response.ok) throw new Error('Failed to fetch dashboard data');
-      
-      const data = await response.json();
-      setDashboardData(data);
-      setError(null);
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-      setError(err.message);
+      // Fetch data in parallel with realistic farm data
+      const [soil, yieldData, disease, market, weather, recommendations] = await Promise.allSettled([
+        fetchSoilHealth(),
+        fetchYieldPrediction(),
+        fetchDiseaseRisk(),
+        fetchMarketData(),
+        fetchWeatherForecast(),
+        fetchCropRecommendations()
+      ]);
+
+      // Handle settled promises
+      if (soil.status === 'fulfilled') setSoilHealth(soil.value);
+      else setErrors(prev => ({ ...prev, soil: soil.reason }));
+
+      if (yieldData.status === 'fulfilled') setYieldPrediction(yieldData.value);
+      else setErrors(prev => ({ ...prev, yield: yieldData.reason }));
+
+      if (disease.status === 'fulfilled') setDiseaseRisk(disease.value);
+      else setErrors(prev => ({ ...prev, disease: disease.reason }));
+
+      if (market.status === 'fulfilled') setMarketData(market.value);
+      else setErrors(prev => ({ ...prev, market: market.reason }));
+
+      if (weather.status === 'fulfilled') setWeatherForecast(weather.value);
+      else setErrors(prev => ({ ...prev, weather: weather.reason }));
+
+      if (recommendations.status === 'fulfilled') setCropRecommendations(recommendations.value);
+      else setErrors(prev => ({ ...prev, recommendations: recommendations.reason }));
+
+    } catch (error) {
+      console.error('Dashboard data fetch error:', error);
     } finally {
       setLoading(false);
     }
+
+    // Simulate fetching active alerts
+    fetchActiveAlerts();
   };
 
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadPreview, setUploadPreview] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showAllAlerts, setShowAllAlerts] = useState(false);
-  const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
-  const dragZoneRef = useRef(null);
+  // API fetch functions
+  const fetchSoilHealth = async () => {
+    const response = await fetch(`${API_BASE_URL}/predictions/soil-health`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nitrogen: 48,
+        phosphorus: 38,
+        potassium: 62,
+        pH: 6.7,
+        moisture: 58,
+        organicMatter: 3.2
+      })
+    });
+    if (!response.ok) throw new Error('Failed to fetch soil health');
+    const data = await response.json();
+    return data.data;
+  };
 
-  // Get alerts from dashboard data
-  const alerts = dashboardData?.alerts?.recent || [];
-  const alertCount = alerts.length;
-  const unreadCount = dashboardData?.alerts?.unreadCount || 0;
+  const fetchYieldPrediction = async () => {
+    const response = await fetch(`${API_BASE_URL}/predictions/crop-yield`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cropName: 'rice',
+        area: 2.5,
+        nitrogen: 48,
+        phosphorus: 38,
+        potassium: 62,
+        rainfall: 820,
+        temperature: 26
+      })
+    });
+    if (!response.ok) throw new Error('Failed to fetch yield prediction');
+    const data = await response.json();
+    return data.data;
+  };
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(t);
-  }, []);
+  const fetchDiseaseRisk = async () => {
+    const response = await fetch(`${API_BASE_URL}/predictions/disease-risk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cropName: 'rice',
+        temperature: 26,
+        humidity: 68,
+        rainfall: 120
+      })
+    });
+    if (!response.ok) throw new Error('Failed to fetch disease risk');
+    const data = await response.json();
+    return data.data;
+  };
 
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-
-  const spring = { type: 'spring', stiffness: 80, damping: 16 };
-  const stagger = (i) => ({ delay: 0.08 * i, ...spring });
-
-  // Upload handlers
-  const handleImageProcessing = (file) => {
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setUploadPreview(e.target.result);
+  const fetchMarketData = async () => {
+    // Simulated market data (endpoint may not exist yet)
+    return {
+      crop: 'Rice',
+      price: 2850,
+      unit: '₹/quintal',
+      change: '+3.2%',
+      trend: 'up',
+      marketScore: 78,
+      demandLevel: 'High'
     };
-    reader.readAsDataURL(file);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    dragZoneRef.current?.classList.add('border-brand', 'bg-brand/10');
+  const fetchWeatherForecast = async () => {
+    const response = await fetch(`${API_BASE_URL}/weather/data/forecast?location=Bangalore`);
+    if (!response.ok) throw new Error('Failed to fetch weather forecast');
+    const data = await response.json();
+    return data.data;
   };
 
-  const handleDragLeave = () => {
-    dragZoneRef.current?.classList.remove('border-brand', 'bg-brand/10');
+  const fetchCropRecommendations = async () => {
+    const response = await fetch(`${API_BASE_URL}/predictions/recommendation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        farmArea: 2.5,
+        soilData: {
+          nitrogen: 48,
+          phosphorus: 38,
+          potassium: 62,
+          pH: 6.7
+        },
+        weatherData: {
+          temperature: 26,
+          rainfall: 820,
+          humidity: 68
+        },
+        cropPreferences: ['rice', 'wheat', 'cotton']
+      })
+    });
+    if (!response.ok) throw new Error('Failed to fetch crop recommendations');
+    const data = await response.json();
+    return data.data;
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    dragZoneRef.current?.classList.remove('border-brand', 'bg-brand/10');
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleImageProcessing(files[0]);
+  const fetchActiveAlerts = () => {
+    // Simulated alerts based on data conditions
+    const activeAlerts = [
+      {
+        id: 1,
+        type: 'warning',
+        priority: 'high',
+        title: 'Moisture Level Alert',
+        message: 'Field moisture at 58% - consider irrigation within 2 days',
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        actionable: true
+      },
+      {
+        id: 2,
+        type: 'info',
+        priority: 'medium',
+        title: 'Weather Update',
+        message: 'Rain expected in 3 days - postpone fertilizer application',
+        timestamp: new Date(Date.now() - 7200000).toISOString(),
+        actionable: false
+      }
+    ];
+    setAlerts(activeAlerts);
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim()) return;
+
+    const userMessage = { role: 'user', content: chatInput };
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: chatInput,
+          context: { soilHealth, yieldPrediction, diseaseRisk }
+        })
+      });
+
+      if (!response.ok) throw new Error('Chat service unavailable');
+
+      const data = await response.json();
+      const aiMessage = { role: 'assistant', content: data.response || 'I can help with farming advice!' };
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      const errorMessage = { 
+        role: 'assistant', 
+        content: 'Sorry, I am currently offline. Please try again later.' 
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
     }
   };
 
-  const handleFileSelect = (e) => {
-    if (e.target.files?.length > 0) {
-      handleImageProcessing(e.target.files[0]);
-    }
+  const getWeatherIcon = (condition) => {
+    const lower = condition?.toLowerCase() || '';
+    if (lower.includes('sun') || lower.includes('clear')) return <Sun className="text-amber-500" size={24} />;
+    if (lower.includes('cloud')) return <Cloud className="text-stone-400" size={24} />;
+    if (lower.includes('rain')) return <Droplets className="text-blue-500" size={24} />;
+    return <Cloud className="text-stone-400" size={24} />;
   };
 
-  const handleCameraCapture = (e) => {
-    if (e.target.files?.length > 0) {
-      handleImageProcessing(e.target.files[0]);
-    }
+  const getRiskColor = (level) => {
+    const lower = level?.toLowerCase() || '';
+    if (lower.includes('low')) return AGRITECH_COLORS.semantic.success;
+    if (lower.includes('moderate') || lower.includes('medium')) return AGRITECH_COLORS.semantic.warning;
+    return AGRITECH_COLORS.semantic.error;
   };
 
-  const handleAnalyze = async () => {
-    if (!uploadPreview) return;
-    setIsAnalyzing(true);
-    // Simulate analysis - in real app, send to ML service
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      navigate('/scanner');
-      setShowUploadModal(false);
-    }, 1500);
-  };
+  // Loading skeleton
+  if (loading) {
+    return (
+      <div className={cn(layoutPatterns.mainContent, "min-h-screen bg-neutral-950")}>
+        <div className="space-y-6">
+          {/* Header skeleton */}
+          <div className="animate-pulse">
+            <div className="h-8 bg-neutral-800 rounded-lg w-64 mb-2"></div>
+            <div className="h-4 bg-neutral-800 rounded w-96"></div>
+          </div>
+          
+          {/* Cards skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="animate-pulse">
+                <div className="h-48 bg-neutral-800 rounded-xl"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-  const clearPreview = () => {
-    setUploadPreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
+  return (
+    <div className="min-h-screen bg-neutral-950">
+      <div className={cn(layoutPatterns.mainContent)}>
+        {/* Asymmetric Header - Left-aligned per DESIGN_VARIANCE=7 */}
+        <div className="mb-4 space-y-1">
+          <h1 className={cn(tastePatterns.typography.h2, "text-neutral-100")}>
+            {t('dashboard.welcome') || 'Farm Dashboard'}
+          </h1>
+          <p className={cn(tastePatterns.typography.body, "text-neutral-400")}>
+            Real-time insights for smarter farming decisions
+          </p>
+        </div>
+
+        {/* Asymmetric Grid Layout - DESIGN_VARIANCE=7 */}
+        <div className="grid grid-cols-12 gap-2.5 lg:gap-3">
+          
+          {/* Left Column - Primary Metrics (spans 8 cols on large screens) */}
+          <div className="col-span-12 lg:col-span-8 space-y-2.5 lg:space-y-3">
+            
+            {/* Top Row: Soil Health + Yield Prediction */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 lg:gap-3">
+              
+              {/* Soil Health Card */}
+              <SoilHealthCard 
+                data={soilHealth} 
+                error={errors.soil}
+                onRetry={() => fetchSoilHealth().then(setSoilHealth)}
+              />
+
+              {/* Yield Prediction Card */}
+              <YieldPredictionCard 
+                data={yieldPrediction}
+                error={errors.yield}
+                onRetry={() => fetchYieldPrediction().then(setYieldPrediction)}
+              />
+            </div>
+
+            {/* Weather Forecast - Full Width */}
+            <WeatherForecastSection 
+              data={weatherForecast}
+              error={errors.weather}
+              onRetry={() => fetchWeatherForecast().then(setWeatherForecast)}
+            />
+
+            {/* Crop Recommendations */}
+            <CropRecommendationsCard 
+              data={cropRecommendations}
+              error={errors.recommendations}
+              onRetry={() => fetchCropRecommendations().then(setCropRecommendations)}
+            />
+          </div>
+
+          {/* Right Column - Secondary Metrics (spans 4 cols on large screens) */}
+          <div className="col-span-12 lg:col-span-4 space-y-2.5 lg:space-y-3">
+            
+            {/* Disease Risk Indicator */}
+            <DiseaseRiskCard 
+              data={diseaseRisk}
+              error={errors.disease}
+              onRetry={() => fetchDiseaseRisk().then(setDiseaseRisk)}
+            />
+
+            {/* Market Score Card */}
+            <MarketScoreCard 
+              data={marketData}
+              error={errors.market}
+              onRetry={() => setMarketData(fetchMarketData())}
+            />
+
+            {/* Active Alerts */}
+            <ActiveAlertsSection alerts={alerts} />
+          </div>
+        </div>
+
+        {/* AI Chat Widget - Bottom Right */}
+        <ChatWidget
+          isOpen={chatOpen}
+          isMinimized={chatMinimized}
+          messages={chatMessages}
+          input={chatInput}
+          loading={chatLoading}
+          onToggle={() => setChatOpen(!chatOpen)}
+          onMinimize={() => setChatMinimized(!chatMinimized)}
+          onInputChange={setChatInput}
+          onSend={sendChatMessage}
+        />
+      </div>
+    </div>
+  );
+};
+
+// Soil Health Card Component
+const SoilHealthCard = ({ data, error, onRetry }) => {
+  if (error) {
+    return (
+      <ErrorCard 
+        title="Soil Health" 
+        message="Unable to load soil data" 
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base, "animate-pulse")}>
+        <div className="h-40 bg-neutral-800 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  const getHealthColor = (score) => {
+    if (score >= 75) return AGRITECH_COLORS.semantic.success;
+    if (score >= 50) return AGRITECH_COLORS.semantic.warning;
+    return AGRITECH_COLORS.semantic.error;
   };
 
   return (
-    <Layout>
-      <div className="px-4 py-6 md:px-8 md:py-8 max-w-5xl mx-auto">
-
-        {/* ── Hero greeting ──────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="mb-8"
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-brand text-xs font-bold uppercase tracking-widest mb-1">{dateStr}</p>
-              <h1 className="font-display text-3xl md:text-4xl font-bold text-neutral-50 leading-tight">
-                {getGreeting()},<br />
-                <span className="gradient-text-brand">{user.name || 'Farmer'}</span>
-              </h1>
-              <p className="text-neutral-400 text-sm mt-2">Your farm is looking healthy today.</p>
-            </div>
-            <div className="flex flex-col items-end gap-1 mt-1">
-              <span className="text-2xl font-bold text-neutral-50 font-display tabular-nums">{timeStr}</span>
-              <span className="text-xs text-neutral-500">Pune, MH</span>
-            </div>
+    <div 
+      className={cn(
+        tastePatterns.earthyCard.base,
+        tastePatterns.earthyCard.hover,
+        "transform transition-all duration-300 hover:scale-[1.02]",
+        "stagger-delay-1"
+      )}
+      style={{ animationDelay: '0.1s' }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-success/15">
+            <Leaf className="text-[#3B6D11]" size={24} />
           </div>
-        </motion.div>
-
-        {/* ── Farm health + weather hero card ────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="glass rounded-3xl p-5 md:p-6 mb-5 relative overflow-hidden"
-        >
-          {/* Glow accents */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-brand/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-1/3 w-32 h-32 bg-harvest/5 rounded-full blur-2xl pointer-events-none" />
-
-          <div className="relative z-10 flex items-center justify-between flex-wrap gap-6">
-
-            {/* Farm health ring */}
-            <div className="flex items-center gap-5">
-              <FarmHealthRing score={84} />
-              <div>
-                <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-1">Farm Health</p>
-                <p className="text-lg font-bold text-neutral-50">Excellent</p>
-                <p className="text-xs text-neutral-400 mt-1">
-                  {alertCount} minor alerts · 
-                  <button 
-                    onClick={() => setShowAllAlerts(true)}
-                    className="text-brand hover:text-brand/80 cursor-pointer font-semibold ml-1 transition-colors"
-                  >
-                    View all
-                  </button>
-                </p>
-                <div className="flex items-center gap-1.5 mt-3">
-                  <span className="px-2 py-0.5 bg-brand/15 text-brand text-xs font-semibold rounded-full border border-brand/20">Wheat</span>
-                  <span className="px-2 py-0.5 bg-sky/10 text-sky text-xs font-semibold rounded-full border border-sky/15">Flowering</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="hidden md:block w-px h-24 bg-white/[0.07]" />
-
-            {/* Weather quick stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1 min-w-0">
-              {[
-                { icon: Thermometer, label: 'Temp',     value: '28°C', sub: 'Feels 30°', color: 'text-alert' },
-                { icon: Droplets,    label: 'Humidity',  value: '68%',  sub: 'Good range', color: 'text-sky' },
-                { icon: Wind,        label: 'Wind',      value: '12 km/h', sub: 'NE breeze', color: 'text-neutral-300' },
-                { icon: Sun,         label: 'UV Index',  value: '7',    sub: 'High', color: 'text-harvest' },
-              ].map(({ icon: Icon, label, value, sub, color }, i) => (
-                <motion.div
-                  key={label}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 0.3 + i * 0.07, ...spring }}
-                  className="bg-white/[0.04] rounded-2xl p-3 border border-white/[0.06]"
-                >
-                  <Icon className={`w-4 h-4 ${color} mb-2`} />
-                  <p className="text-lg font-bold text-neutral-50">{value}</p>
-                  <p className="text-[11px] text-neutral-500 leading-tight">{label}</p>
-                  <p className="text-[10px] text-neutral-600 mt-0.5">{sub}</p>
-                </motion.div>
-              ))}
-            </div>
+          <div>
+            <h3 className={cn(tastePatterns.typography.label, "text-neutral-100 text-xs")}>
+              Soil Health Score
+            </h3>
+            <p className="text-3xl font-bold mt-1" style={{ color: getHealthColor(data.healthScore) }}>
+              {data.healthScore}
+              <span className="text-lg text-neutral-500 ml-1">/100</span>
+            </p>
           </div>
-        </motion.div>
-
-        {/* ── Quick actions ──────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-          className="grid grid-cols-4 gap-3 mb-5"
-        >
-          {QUICK_ACTIONS.map(({ label, icon: Icon, path, action, bg, text }, i) => (
-            <motion.button
-              key={label}
-              whileHover={{ scale: 1.04, y: -2 }}
-              whileTap={{ scale: 0.96 }}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 + i * 0.06, ...spring }}
-              onClick={() => action === 'scan' ? setShowUploadModal(true) : navigate(path)}
-              className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border transition-all ${bg}`}
-            >
-              <Icon className={`w-5 h-5 md:w-6 md:h-6 ${text}`} />
-              <span className={`text-[11px] md:text-xs font-semibold ${text}`}>{label}</span>
-            </motion.button>
-          ))}
-        </motion.div>
-
-        {/* ── Two column: AI tip + Alerts ─────────────── */}
-        <div className="grid md:grid-cols-2 gap-5 mb-5">
-
-          {/* AI Daily Insight */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.4, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="glass rounded-3xl p-5 relative overflow-hidden border border-lavender/10"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-lavender/6 via-transparent to-transparent pointer-events-none" />
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-xl bg-lavender/15 border border-lavender/25 flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-lavender" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-lavender uppercase tracking-wider">AI Insight</p>
-                  <p className="text-[10px] text-neutral-600">Updated just now</p>
-                </div>
-                <button onClick={() => navigate('/chat')} className="ml-auto text-neutral-600 hover:text-lavender transition-colors">
-                  <ArrowUpRight className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-sm text-neutral-200 leading-relaxed">
-                Your wheat is in peak flowering stage. Ensure soil moisture stays above 40%.
-                A light irrigation tomorrow morning will maximize grain set yield by an estimated{' '}
-                <span className="text-brand font-semibold">12–15%</span>.
-              </p>
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  onClick={() => navigate('/chat')}
-                  className="text-xs font-semibold text-lavender flex items-center gap-1 hover:gap-2 transition-all"
-                >
-                  Ask AI for details <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Alerts */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.45, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            className="glass rounded-3xl p-5"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-bold text-neutral-200">Recent Alerts</p>
-              <span className="text-[10px] font-semibold text-alert bg-alert/10 border border-alert/20 px-2 py-0.5 rounded-full">
-                {alertCount} new
-              </span>
-            </div>
-            <div className="space-y-2 mb-3">
-              {alerts.slice(0, 2).map(({ id, icon, text, time, color }, i) => {
-                const IconComponent = iconMapping[icon] || AlertTriangle;
-                return (
-                <motion.div
-                  key={id}
-                  initial={{ opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.55 + i * 0.08, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border ${colorAlertMap[color]}`}
-                >
-                  <IconComponent className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-neutral-200 leading-snug">{text}</p>
-                    <p className="text-[10px] text-neutral-600 mt-0.5">{time}</p>
-                  </div>
-                </motion.div>
-                );
-              })}
-            </div>
-            {alertCount > 2 && (
-              <button
-                onClick={() => setShowAllAlerts(true)}
-                className="w-full text-center text-xs font-semibold text-brand hover:text-brand/80 py-2 transition-colors"
-              >
-                View all {alertCount} alerts
-              </button>
-            )}
-          </motion.div>
         </div>
-
-        {/* ── Crop overview + Upcoming tasks ──────────── */}
-        <div className="grid md:grid-cols-2 gap-5">
-
-          {/* Active crop */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            className="glass rounded-3xl p-5 relative overflow-hidden cursor-pointer group"
-            onClick={() => navigate('/crops')}
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-brand/4 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-            <div className="absolute -bottom-4 -right-4 text-brand/8 group-hover:text-brand/14 transition-colors duration-500">
-              <Wheat className="w-28 h-28" />
-            </div>
-            <div className="relative z-10">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-brand/15 border border-brand/25 rounded-xl flex items-center justify-center">
-                  <Sprout className="w-4 h-4 text-brand" />
-                </div>
-                <p className="text-sm font-bold text-neutral-200">Active Crop</p>
-                <ChevronRight className="w-4 h-4 text-neutral-600 ml-auto group-hover:text-brand group-hover:translate-x-1 transition-all" />
-              </div>
-              <p className="font-display text-2xl font-bold text-neutral-50 mb-1">Wheat</p>
-              <p className="text-xs text-neutral-500 mb-4">Triticum aestivum · Field A (4.2 ha)</p>
-              {/* Growth progress */}
-              <div className="space-y-2">
-                {[
-                  { stage: 'Germination', pct: 100, done: true },
-                  { stage: 'Tillering',   pct: 100, done: true },
-                  { stage: 'Flowering',   pct: 65,  done: false },
-                  { stage: 'Harvest',     pct: 0,   done: false },
-                ].map(({ stage, pct, done }) => (
-                  <div key={stage} className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${done ? 'bg-brand' : pct > 0 ? 'bg-harvest animate-pulse' : 'bg-white/10'}`} />
-                    <div className="flex-1 h-1 bg-white/[0.06] rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ delay: 0.8, duration: 1, ease: [0.16, 1, 0.3, 1] }}
-                        className={`h-full rounded-full ${done ? 'bg-brand' : pct > 0 ? 'bg-harvest' : 'bg-transparent'}`}
-                      />
-                    </div>
-                    <span className="text-[10px] text-neutral-500 w-16">{stage}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Upcoming tasks */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.62, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            className="glass rounded-3xl p-5"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-harvest/10 border border-harvest/20 rounded-xl flex items-center justify-center">
-                <CalendarDays className="w-4 h-4 text-harvest" />
-              </div>
-              <p className="text-sm font-bold text-neutral-200">Upcoming Tasks</p>
-            </div>
-            <div className="space-y-3">
-              {[
-                { task: 'Apply Urea fertilizer',       due: 'Tomorrow',   priority: 'high',   icon: TrendingUp },
-                { task: 'Pest scouting – Field B',      due: 'In 2 days',  priority: 'medium', icon: Leaf },
-                { task: 'Soil moisture check – All',    due: 'In 3 days',  priority: 'low',    icon: Droplets },
-                { task: 'Harvest readiness assessment', due: 'In 10 days', priority: 'low',    icon: Wheat },
-              ].map(({ task, due, priority, icon: Icon }, i) => (
-                <motion.div
-                  key={task}
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 + i * 0.08, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] hover:border-white/[0.1] transition-colors group cursor-pointer"
-                >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    priority === 'high' ? 'bg-alert/10 border border-alert/20' :
-                    priority === 'medium' ? 'bg-harvest/10 border border-harvest/20' :
-                    'bg-brand/8 border border-brand/15'
-                  }`}>
-                    <Icon className={`w-3.5 h-3.5 ${
-                      priority === 'high' ? 'text-alert' :
-                      priority === 'medium' ? 'text-harvest' :
-                      'text-brand'
-                    }`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-neutral-200 truncate">{task}</p>
-                    <p className="text-[10px] text-neutral-600 flex items-center gap-1 mt-0.5">
-                      <Clock className="w-2.5 h-2.5" /> {due}
-                    </p>
-                  </div>
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    priority === 'high' ? 'bg-alert' :
-                    priority === 'medium' ? 'bg-harvest' :
-                    'bg-brand/50'
-                  }`} />
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
       </div>
 
-      {/* ── Upload Modal ──────────────────────────── */}
-      <AnimatePresence>
-        {showUploadModal && (
-          <motion.div
-            key="modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => {
-              setShowUploadModal(false);
-              clearPreview();
-            }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-end md:items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 32, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 32, scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass rounded-3xl p-6 md:p-8 w-full max-w-md mx-auto"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-neutral-50">Scan Your Crop</h2>
-                  <p className="text-sm text-neutral-400 mt-1">Upload or capture an image for instant health analysis</p>
+      <div className="space-y-2.5">
+        <div className="flex justify-between items-center py-1.5 border-t border-neutral-800">
+          <span className="text-sm text-neutral-300">Rating</span>
+          <span className="text-sm font-semibold text-neutral-100">{data.rating}</span>
+        </div>
+        
+        {data.improvements && data.improvements.length > 0 && (
+          <div className="pt-2 border-t border-neutral-800">
+            <p className="text-xs font-medium text-neutral-400 mb-2">Key Improvements:</p>
+            <ul className="space-y-1">
+              {data.improvements.slice(0, 2).map((improvement, idx) => (
+                <li key={idx} className="text-xs text-neutral-300 flex items-start gap-2">
+                  <ChevronRight size={14} className="text-[#3B6D11] mt-0.5 flex-shrink-0" />
+                  <span>{improvement}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Yield Prediction Card Component
+const YieldPredictionCard = ({ data, error, onRetry }) => {
+  if (error) {
+    return (
+      <ErrorCard 
+        title="Yield Prediction" 
+        message="Unable to load yield data" 
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base, "animate-pulse")}>
+        <div className="h-40 bg-neutral-800 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  const confidencePercent = Math.round((data.confidence || 0) * 100);
+
+  return (
+    <div 
+      className={cn(
+        tastePatterns.earthyCard.base,
+        tastePatterns.earthyCard.hover,
+        "transform transition-all duration-300 hover:scale-[1.02]",
+        "stagger-delay-2"
+      )}
+      style={{ animationDelay: '0.2s' }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-warning/15">
+            <TrendingUp className="text-warning" size={24} />
+          </div>
+          <div>
+            <h3 className={cn(tastePatterns.typography.label, "text-neutral-100 text-xs")}>
+              Predicted Yield
+            </h3>
+            <p className="text-3xl font-bold text-neutral-100 mt-1">
+              {(data.estimatedYield / 1000).toFixed(1)}
+              <span className="text-lg text-neutral-500 ml-1">t/ha</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2.5">
+        <div className="flex justify-between items-center py-1.5 border-t border-neutral-800">
+          <span className="text-sm text-neutral-300">Confidence</span>
+          <div className="flex items-center gap-2">
+            <div className="w-20 h-2 bg-neutral-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-[#3B6D11] transition-all duration-500"
+                style={{ width: `${confidencePercent}%` }}
+              />
+            </div>
+            <span className="text-sm font-semibold text-neutral-100">{confidencePercent}%</span>
+          </div>
+        </div>
+
+        {data.recommendations && data.recommendations.length > 0 && (
+          <div className="pt-2 border-t border-neutral-800">
+            <p className="text-xs font-medium text-neutral-400 mb-2">Quick Tips:</p>
+            <ul className="space-y-1">
+              {data.recommendations.slice(0, 2).map((tip, idx) => (
+                <li key={idx} className="text-xs text-neutral-300 flex items-start gap-2">
+                  <ChevronRight size={14} className="text-[#3B6D11] mt-0.5 flex-shrink-0" />
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Disease Risk Card Component
+const DiseaseRiskCard = ({ data, error, onRetry }) => {
+  if (error) {
+    return (
+      <ErrorCard 
+        title="Disease Risk" 
+        message="Unable to load risk data" 
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base, "animate-pulse")}>
+        <div className="h-48 bg-neutral-800 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  const riskColor = getRiskColor(data.riskLevel);
+
+  return (
+    <div 
+      className={cn(
+        tastePatterns.earthyCard.base,
+        tastePatterns.earthyCard.hover,
+        "stagger-delay-3"
+      )}
+      style={{ animationDelay: '0.3s' }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg" style={{ backgroundColor: `${riskColor}15` }}>
+            <AlertTriangle style={{ color: riskColor }} size={24} />
+          </div>
+          <div>
+            <h3 className={cn(tastePatterns.typography.label, "text-neutral-100 text-xs")}>
+              Disease Risk
+            </h3>
+            <p className="text-2xl font-bold mt-1 capitalize" style={{ color: riskColor }}>
+              {data.riskLevel}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2.5">
+        <div className="flex justify-between items-center py-1.5 border-t border-neutral-800">
+          <span className="text-sm text-neutral-300">Risk Score</span>
+          <span className="text-sm font-semibold text-neutral-100">{data.riskScore}/100</span>
+        </div>
+
+        {data.potentialDiseases && data.potentialDiseases.length > 0 && (
+          <div className="pt-2 border-t border-neutral-800">
+            <p className="text-xs font-medium text-neutral-400 mb-2">Potential Threats:</p>
+            <div className="space-y-2">
+              {data.potentialDiseases.slice(0, 2).map((disease, idx) => (
+                <div key={idx} className="flex justify-between items-center">
+                  <span className="text-xs text-neutral-300">{disease.disease}</span>
+                  <span className="text-xs font-medium px-2 py-0.5 rounded" 
+                        style={{ 
+                          backgroundColor: `${getRiskColor(disease.severity)}15`,
+                          color: getRiskColor(disease.severity)
+                        }}>
+                    {Math.round(disease.probability * 100)}%
+                  </span>
                 </div>
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    clearPreview();
-                  }}
-                  className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 flex items-center justify-center transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.preventionMeasures && data.preventionMeasures.length > 0 && (
+          <div className="pt-2 border-t border-neutral-800">
+            <p className="text-xs font-medium text-neutral-400 mb-2">Prevention:</p>
+            <ul className="space-y-1">
+              {data.preventionMeasures.slice(0, 2).map((measure, idx) => (
+                <li key={idx} className="text-xs text-neutral-300 flex items-start gap-2">
+                  <ChevronRight size={14} className="text-[#3B6D11] mt-0.5 flex-shrink-0" />
+                  <span>{measure}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Market Score Card Component
+const MarketScoreCard = ({ data, error, onRetry }) => {
+  if (error) {
+    return (
+      <ErrorCard 
+        title="Market Data" 
+        message="Unable to load market info" 
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base, "animate-pulse")}>
+        <div className="h-48 bg-neutral-800 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={cn(
+        tastePatterns.earthyCard.base,
+        tastePatterns.earthyCard.hover,
+        "stagger-delay-4"
+      )}
+      style={{ animationDelay: '0.4s' }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-accent-500/15">
+            <TrendingUp className="text-accent-500" size={24} />
+          </div>
+          <div>
+            <h3 className={cn(tastePatterns.typography.label, "text-neutral-100 text-xs")}>
+              Market Score
+            </h3>
+            <p className="text-3xl font-bold text-neutral-100 mt-1">
+              {data.marketScore}
+              <span className="text-lg text-neutral-500 ml-1">/100</span>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2.5">
+        <div className="flex justify-between items-center py-1.5 border-t border-neutral-800">
+          <span className="text-sm text-neutral-300">{data.crop} Price</span>
+          <div className="text-right">
+            <p className="text-sm font-semibold text-neutral-100">{data.unit} {data.price}</p>
+            <p className={cn(
+              "text-xs font-medium",
+              data.trend === 'up' ? 'text-[#3B6D11]' : 'text-[#B45309]'
+            )}>
+              {data.trend === 'up' ? '↗' : '↘'} {data.change}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center py-1.5 border-t border-neutral-800">
+          <span className="text-sm text-neutral-300">Demand Level</span>
+          <span className={cn(
+            "text-xs font-medium px-3 py-1 rounded-full",
+            data.demandLevel === 'High' ? 'bg-success/15 text-success' : 'bg-neutral-800 text-neutral-300'
+          )}>
+            {data.demandLevel}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Weather Forecast Section Component
+const WeatherForecastSection = ({ data, error, onRetry }) => {
+  if (error) {
+    return (
+      <ErrorCard 
+        title="Weather Forecast" 
+        message="Unable to load weather data" 
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  if (!data || !data.forecast) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base, "animate-pulse")}>
+        <div className="h-48 bg-neutral-800 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  const getWeatherIcon = (condition) => {
+    const lower = condition?.toLowerCase() || '';
+    if (lower.includes('sun') || lower.includes('clear')) return <Sun className="text-amber-500" size={32} />;
+    if (lower.includes('cloud')) return <Cloud className="text-stone-400" size={32} />;
+    if (lower.includes('rain')) return <Droplets className="text-blue-500" size={32} />;
+    return <Cloud className="text-stone-400" size={32} />;
+  };
+
+  return (
+    <div 
+      className={cn(
+        tastePatterns.earthyCard.base,
+        tastePatterns.earthyCard.hover,
+        "stagger-delay-5"
+      )}
+      style={{ animationDelay: '0.5s' }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className={cn(tastePatterns.typography.h4, "text-neutral-100")}>
+          7-Day Forecast
+        </h3>
+        <Calendar size={20} className="text-neutral-400" />
+      </div>
+
+      <div className="grid grid-cols-7 gap-2">
+        {data.forecast.slice(0, 7).map((day, idx) => (
+          <div 
+            key={idx}
+            className="text-center p-3 rounded-lg border border-neutral-800 hover:border-primary-500/30 hover:bg-neutral-800 transition-all duration-200"
+          >
+            <p className="text-xs font-medium text-neutral-400 mb-2">
+              {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+            </p>
+            <div className="flex justify-center mb-2">
+              {getWeatherIcon(day.condition)}
+            </div>
+            <p className="text-lg font-bold text-neutral-100">{day.tempMax}°</p>
+            <p className="text-xs text-neutral-400">{day.tempMin}°</p>
+            {day.precipitation > 0 && (
+              <p className="text-xs text-accent-500 mt-1 flex items-center justify-center gap-1">
+                <Droplets size={12} />
+                {day.precipitation}%
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Crop Recommendations Card Component
+const CropRecommendationsCard = ({ data, error, onRetry }) => {
+  if (error) {
+    return (
+      <ErrorCard 
+        title="Crop Recommendations" 
+        message="Unable to load recommendations" 
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  if (!data || !data.recommendedCrops) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base, "animate-pulse")}>
+        <div className="h-48 bg-neutral-800 rounded-lg"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={cn(
+        tastePatterns.earthyCard.base,
+        tastePatterns.earthyCard.hover,
+        "stagger-delay-6"
+      )}
+      style={{ animationDelay: '0.6s' }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className={cn(tastePatterns.typography.h4, "text-neutral-100")}>
+          Recommended Crops
+        </h3>
+        <Leaf size={20} className="text-[#3B6D11]" />
+      </div>
+
+      <div className="space-y-4">
+        {data.recommendedCrops.slice(0, 3).map((crop, idx) => (
+          <div 
+            key={idx}
+            className="p-3 rounded-lg border-l-4 bg-neutral-800/60 hover:bg-neutral-800 transition-all duration-200"
+            style={{ 
+              borderLeftColor: idx === 0 ? AGRITECH_COLORS.primary.main : AGRITECH_COLORS.neutral.earth 
+            }}
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <h4 className="text-base font-semibold text-neutral-100 capitalize">{crop.crop}</h4>
+                {idx === 0 && data.bestCrop === crop.crop && (
+                  <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-[#3B6D11] text-white">
+                    Best Choice
+                  </span>
+                )}
               </div>
+              <div className="text-right">
+                <p className="text-xl font-bold text-[#3B6D11]">{crop.suitabilityScore}</p>
+                <p className="text-xs text-neutral-400">Suitability</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5 mt-2.5 pt-2.5 border-t border-neutral-800">
+              <div>
+                <p className="text-xs text-neutral-400">Expected Yield</p>
+                <p className="text-sm font-semibold text-neutral-100">{crop.expectedYield} kg/ha</p>
+              </div>
+              <div>
+                <p className="text-xs text-neutral-400">Profit Margin</p>
+                <p className="text-sm font-semibold text-neutral-100">{crop.profitMargin}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-              {!uploadPreview ? (
-                <div className="space-y-3">
-                  {/* Drag & Drop Zone */}
-                  <div
-                    ref={dragZoneRef}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className="border-2 border-dashed border-white/20 rounded-2xl p-8 text-center hover:border-brand/50 transition-colors"
-                  >
-                    <Upload className="w-10 h-10 mx-auto mb-3 text-brand/60" />
-                    <p className="text-sm font-medium text-neutral-200">Drag crop image here</p>
-                    <p className="text-xs text-neutral-400 mt-1">or use buttons below</p>
-                  </div>
+// Active Alerts Section Component
+const ActiveAlertsSection = ({ alerts }) => {
+  if (!alerts || alerts.length === 0) {
+    return (
+      <div className={cn(tastePatterns.earthyCard.base)}>
+        <div className="flex items-center gap-2.5 mb-3">
+          <Activity className="text-neutral-400" size={20} />
+          <h3 className={cn(tastePatterns.typography.h4, "text-neutral-100")}>
+            Active Alerts
+          </h3>
+        </div>
+        <div className="text-center py-8">
+          <Eye className="text-neutral-600 mx-auto mb-2" size={32} />
+          <p className="text-sm text-neutral-400">No active alerts</p>
+          <p className="text-xs text-neutral-500 mt-1">All systems normal</p>
+        </div>
+      </div>
+    );
+  }
 
-                  {/* File & Camera Inputs (hidden) */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleCameraCapture}
-                    className="hidden"
-                  />
+  const getAlertStyle = (type) => {
+    switch (type) {
+      case 'warning': return tastePatterns.alert.warning;
+      case 'error': return tastePatterns.alert.error;
+      case 'info': return tastePatterns.alert.info;
+      default: return tastePatterns.alert.success;
+    }
+  };
 
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-brand/10 border border-brand/20 hover:bg-brand/15 text-brand font-semibold transition-all"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload
-                    </button>
-                    <button
-                      onClick={() => cameraInputRef.current?.click()}
-                      className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-sky/10 border border-sky/20 hover:bg-sky/15 text-sky font-semibold transition-all"
-                    >
-                      <Camera className="w-4 h-4" />
-                      Capture
-                    </button>
-                  </div>
+  const getPriorityBadge = (priority) => {
+    const colors = {
+      high: 'bg-[#B45309] text-white',
+      medium: 'bg-[#D97706] text-white',
+      low: 'bg-neutral-800 text-neutral-300'
+    };
+    return colors[priority] || colors.low;
+  };
+
+  return (
+    <div className={cn(tastePatterns.earthyCard.base, "stagger-delay-7")} style={{ animationDelay: '0.7s' }}>
+      <div className="flex items-center gap-2.5 mb-3">
+        <Activity className="text-[#3B6D11]" size={20} />
+        <h3 className={cn(tastePatterns.typography.h4, "text-neutral-100")}>
+          Active Alerts
+        </h3>
+        <span className="ml-auto text-xs font-semibold px-2 py-1 rounded-full bg-[#3B6D11] text-white">
+          {alerts.length}
+        </span>
+      </div>
+
+      <div className="space-y-2.5">
+        {alerts.map((alert) => (
+          <div 
+            key={alert.id}
+            className={cn(getAlertStyle(alert.type), "relative group")}
+          >
+            <div className="flex items-start gap-2.5">
+              <div className="flex-shrink-0">
+                {alert.type === 'warning' && <AlertTriangle size={18} className="text-[#D97706]" />}
+                {alert.type === 'info' && <Activity size={18} className="text-[#0D4A6B]" />}
+                {alert.type === 'error' && <AlertTriangle size={18} className="text-[#B45309]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between mb-1">
+                  <h4 className="text-sm font-semibold text-neutral-100">{alert.title}</h4>
+                  <span className={cn("text-xs px-2 py-0.5 rounded-full", getPriorityBadge(alert.priority))}>
+                    {alert.priority}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-300 leading-relaxed">{alert.message}</p>
+                <p className="text-xs text-neutral-500 mt-2">
+                  {new Date(alert.timestamp).toLocaleString('en-IN', { 
+                    dateStyle: 'short', 
+                    timeStyle: 'short' 
+                  })}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button 
+        className={cn(
+          tastePatterns.farmerButton.outline,
+          "w-full mt-4 text-sm"
+        )}
+      >
+        View All Alerts
+      </button>
+    </div>
+  );
+};
+
+// AI Chat Widget Component
+const ChatWidget = ({ isOpen, isMinimized, messages, input, loading, onToggle, onMinimize, onInputChange, onSend }) => {
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  if (!isOpen) {
+    return (
+      <button
+        onClick={onToggle}
+        className={cn(
+          "fixed bottom-5 right-5 p-3.5 rounded-full shadow-lg z-50",
+          "bg-[#3B6D11] text-white hover:bg-[#2D5309]",
+          "transition-all duration-300 hover:scale-110 active:scale-95"
+        )}
+      >
+        <MessageCircle size={24} />
+      </button>
+    );
+  }
+
+  return (
+    <div 
+      className={cn(
+        "fixed bottom-5 right-5 z-50 transition-all duration-300",
+        isMinimized ? "w-72" : "w-[22rem] h-[460px]"
+      )}
+    >
+      <div className={cn(tastePatterns.earthyCard.base, "h-full flex flex-col shadow-2xl")}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-neutral-800 bg-[#3B6D11] rounded-t-xl">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="text-white" size={20} />
+            <h3 className="text-sm font-semibold text-white">AI Farm Assistant</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={onMinimize}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              {isMinimized ? <Maximize2 className="text-white" size={16} /> : <Minimize2 className="text-white" size={16} />}
+            </button>
+            <button 
+              onClick={onToggle}
+              className="p-1 hover:bg-white/20 rounded transition-colors"
+            >
+              <X className="text-white" size={16} />
+            </button>
+          </div>
+        </div>
+
+        {!isMinimized && (
+          <>
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-neutral-900/80">
+              {messages.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageCircle className="text-neutral-600 mx-auto mb-2" size={32} />
+                  <p className="text-sm text-neutral-400">Ask me anything about farming!</p>
+                  <p className="text-xs text-neutral-500 mt-1">I can help with crop advice, weather insights, and more</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* Preview Image */}
-                  <div className="relative rounded-2xl overflow-hidden bg-black/20 aspect-square flex items-center justify-center">
-                    <img
-                      src={uploadPreview}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={clearPreview}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 flex items-center justify-center transition-all"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                messages.map((msg, idx) => (
+                  <div 
+                    key={idx}
+                    className={cn(
+                      "p-3 rounded-lg max-w-[85%]",
+                      msg.role === 'user' 
+                        ? "ml-auto bg-[#3B6D11] text-white" 
+                        : "mr-auto bg-neutral-800 border border-neutral-700 text-neutral-100"
+                    )}
+                  >
+                    <p className="text-sm leading-relaxed">{msg.content}</p>
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={clearPreview}
-                      className="py-3 px-4 rounded-xl bg-white/10 border border-white/20 hover:bg-white/15 text-neutral-200 font-semibold transition-all"
-                    >
-                      Change
-                    </button>
-                    <button
-                      onClick={handleAnalyze}
-                      disabled={isAnalyzing}
-                      className="py-3 px-4 rounded-xl bg-brand text-black font-semibold hover:bg-brand/90 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                    >
-                      {isAnalyzing ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-transparent border-t-black rounded-full animate-spin" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <Camera className="w-4 h-4" />
-                          Analyze
-                        </>
-                      )}
-                    </button>
-                  </div>
+                ))
+              )}
+              {loading && (
+                <div className="flex items-center gap-2 text-neutral-400 text-sm">
+                  <div className="animate-pulse">●</div>
+                  <span>AI is thinking...</span>
                 </div>
               )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
 
-      {/* ── All Alerts Modal ──────────────────────────── */}
-      <AnimatePresence>
-        {showAllAlerts && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setShowAllAlerts(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              className="glass rounded-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
-                <h2 className="text-xl font-bold text-neutral-50">Farm Alerts</h2>
+            {/* Input */}
+            <div className="p-3 border-t border-neutral-800 bg-neutral-900 rounded-b-xl">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your question..."
+                  className={cn(tastePatterns.input.base, "flex-1 text-sm")}
+                  disabled={loading}
+                />
                 <button
-                  onClick={() => setShowAllAlerts(false)}
-                  className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors"
-                >
-                  <X className="w-5 h-5 text-neutral-400" />
-                </button>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="space-y-3">
-                  {alertCount > 0 ? (
-                    alerts.map(({ id, icon, text, time, color, type }) => {
-                      const IconComponent = iconMapping[icon] || AlertTriangle;
-                      return (
-                      <motion.div
-                        key={id}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className={`flex items-start gap-4 p-4 rounded-2xl border ${colorAlertMap[color]}`}
-                      >
-                        <IconComponent className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold text-neutral-50">{text}</p>
-                          <p className="text-xs text-neutral-500 mt-1">{time}</p>
-                          {type === 'warning' && (
-                            <button className="text-xs text-brand hover:text-brand/80 font-semibold mt-2 transition-colors">
-                              Take action →
-                            </button>
-                          )}
-                        </div>
-                        <div className="flex-shrink-0">
-                          <span className="text-[10px] font-semibold text-neutral-500 uppercase bg-white/5 px-2 py-1 rounded-full">
-                            {type}
-                          </span>
-                        </div>
-                      </motion.div>
-                      );
-                    })
-                  ) : (
-                    <div className="text-center py-12">
-                      <CheckCircle2 className="w-16 h-16 text-brand/40 mx-auto mb-4" />
-                      <p className="text-neutral-400">No alerts at the moment</p>
-                    </div>
+                  onClick={onSend}
+                  disabled={loading || !input.trim()}
+                  className={cn(
+                    tastePatterns.farmerButton.primary,
+                    "px-4",
+                    (loading || !input.trim()) && "opacity-50 cursor-not-allowed"
                   )}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="border-t border-white/[0.06] p-6 bg-white/[0.02]">
-                <button
-                  onClick={() => setShowAllAlerts(false)}
-                  className="w-full py-3 rounded-xl bg-brand text-black font-semibold hover:bg-brand/90 transition-colors"
                 >
-                  Close
+                  <Send size={16} />
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </>
         )}
-      </AnimatePresence>
-
-    </Layout>
+      </div>
+    </div>
   );
-}
+};
+
+// Error Card Component (Reusable)
+const ErrorCard = ({ title, message, onRetry }) => {
+  return (
+    <div className={cn(tastePatterns.earthyCard.base, "border-l-4 border-[#B45309]")}>
+      <div className="flex items-start gap-3 mb-3">
+        <AlertTriangle className="text-[#B45309] flex-shrink-0" size={20} />
+        <div>
+          <h4 className="text-sm font-semibold text-neutral-100">{title}</h4>
+          <p className="text-xs text-neutral-400 mt-1">{message}</p>
+        </div>
+      </div>
+      {onRetry && (
+        <button 
+          onClick={onRetry}
+          className={cn(tastePatterns.farmerButton.outline, "w-full text-xs")}
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+};
+
+// Helper function for risk color (used in multiple components)
+const getRiskColor = (level) => {
+  const lower = level?.toLowerCase() || '';
+  if (lower.includes('low')) return AGRITECH_COLORS.semantic.success;
+  if (lower.includes('moderate') || lower.includes('medium')) return AGRITECH_COLORS.semantic.warning;
+  return AGRITECH_COLORS.semantic.error;
+};
+
+export default Dashboard;

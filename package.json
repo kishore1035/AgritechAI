@@ -12,5 +12,8 @@
     "start-frontend": "cd frontend && npm run dev",
     "start-ml": "cd ml-service && python app.py",
     "seed": "cd backend && node seedCrops.js"
+  },
+  "dependencies": {
+    "i18next-browser-languagedetector": "^8.2.1"
   }
 }
